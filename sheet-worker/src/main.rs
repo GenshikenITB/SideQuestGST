@@ -7,6 +7,7 @@ use rdkafka::consumer::{CommitMode, Consumer, StreamConsumer};
 use rdkafka::message::Message;
 use std::env;
 use crate::models::EventMessage;
+use std::time::Duration;
 
 #[tokio::main]
 async fn main() {
@@ -47,6 +48,17 @@ async fn main() {
     consumer.subscribe(&["quest.events"]).expect("Subscription failed");
 
     println!("Worker Ready. Listening for events on 'quest.events'...");
+
+    let hub_clone = hub.clone();
+    let sheet_id_clone = sheet_id.clone();
+    
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(Duration::from_secs(3600));
+        loop {
+            interval.tick().await;
+            sheets::check_deadlines_job(&hub_clone, &sheet_id_clone).await;
+        }
+    });
 
     loop {
         match consumer.recv().await {
