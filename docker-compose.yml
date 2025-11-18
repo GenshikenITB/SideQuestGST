@@ -36,6 +36,7 @@ services:
       - DISCORD_TOKEN=${DISCORD_TOKEN}
       - KAFKA_BROKERS=kafka:9093
       - TARGET_GUILD_ID=${TARGET_GUILD_ID}
+      - QUEST_GIVER_ID=${QUEST_GIVER_ID}
       - GOOGLE_SHEET_ID=${GOOGLE_SHEET_ID}
       - GOOGLE_APPLICATION_CREDENTIALS=/app/credentials.json
       - RUST_LOG=info
