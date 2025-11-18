@@ -103,9 +103,10 @@ pub async fn create(
         #[placeholder = "Example: 5v5 MLBB Fun Match / KSICK"]
         title: String,
         
-        #[name = "Description"]
+        #[name = "Description & Platform / Location"]
         #[paragraph]
-        description: String,
+        #[placeholder = "Row 1: [Platform/Location - Required\nRow 2+: [Quest Description]"]
+        description_and_platform: String,
 
         #[name = "Participant Slots"]
         #[placeholder = "Example: 5"]
@@ -120,9 +121,6 @@ pub async fn create(
         #[name = "Deadline (YYYY-MM-DD HH:MM)"]
         #[placeholder = "Empty if same as start time"]
         deadline: Option<String>,
-
-        #[name = "Platform / Location"]
-        platform: String,
     }
 
     let app_ctx = match ctx {
@@ -157,17 +155,24 @@ pub async fn create(
             _ => schedule_iso.clone(),
         };
 
+        let (description, platform) = {
+            let parts: Vec<&str> = data.description_and_platform.splitn(2, '\n').collect();
+            let platform = parts[0].trim().to_string();
+            let description = parts.get(1).map(|s| s.trim().to_string()).unwrap_or_default();
+            (description, platform)
+        };
+
         let quest_id = uuid::Uuid::new_v4().to_string();
 
         let payload = QuestPayload {
             quest_id: quest_id.clone(),
             title: data.title.clone(),
-            description: data.description,
+            description: description,
             slots: data.slots.clone().parse::<i8>().unwrap(),
             category: format!("{:?}", category),
             organizer_name: organizer_final,
             schedule: schedule_iso.clone(),
-            platform: data.platform.clone(),
+            platform: platform,
             deadline: deadline_iso,
             creator_id: ctx.author().id.to_string(),
         };
