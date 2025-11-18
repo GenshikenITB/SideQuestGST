@@ -15,7 +15,7 @@ pub async fn stats(ctx: Context<'_>) -> Result<(), Error> {
 
     let result = hub.spreadsheets().values_batch_get(sheet_id)
         .add_ranges("Participants!A:D")
-        .add_ranges("Quests!A:D")
+        .add_ranges("Quests!A:E")
         .doit()
         .await;
 
@@ -32,7 +32,7 @@ pub async fn stats(ctx: Context<'_>) -> Result<(), Error> {
             
             if let Some(q_rows) = &value_ranges[1].values {
                 for row in q_rows {
-                    if row.len() >= 4 {
+                    if row.len() >= 5 {
                         let q_id = row[0].as_str().unwrap_or("").to_string();
                         let title = row[1].as_str().unwrap_or("Unknown Title").to_string();
                         let organizer = row[3].as_str().unwrap_or("Unknown").to_string();
@@ -47,7 +47,7 @@ pub async fn stats(ctx: Context<'_>) -> Result<(), Error> {
             let mut quest_list_str = String::new();
 
             if let Some(p_rows) = &value_ranges[0].values {
-                for row in p_rows {
+                for row in p_rows.iter().skip(1) {
                     if row.len() >= 4 {
                         let row_user_id = row[1].as_str().unwrap_or("");
 

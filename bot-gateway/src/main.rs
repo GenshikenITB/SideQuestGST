@@ -67,6 +67,7 @@ async fn main() {
                 commands::quest::take(),
                 commands::quest::submit(),
                 commands::stats::stats(),
+                commands::list::list(),
                 commands::admin::register_community(),
             ],
             ..Default::default()

@@ -5,7 +5,7 @@ use chrono::DateTime;
 type Context<'a> = poise::Context<'a, Data, Error>;
 
 #[poise::command(slash_command, check = "crate::security::check_guild")]
-pub async fn list_quests(ctx: Context<'_>) -> Result<(), Error> {
+pub async fn list(ctx: Context<'_>) -> Result<(), Error> {
     ctx.defer().await?;
 
     let hub = &ctx.data().sheets_hub;
