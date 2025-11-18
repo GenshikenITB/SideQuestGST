@@ -6,7 +6,7 @@ Platform ini dirancang untuk mengotomatisasi alur kerja "Side Quest" pada event 
 
 ## 2. Tech Stack
 
-- Programming Language: Rust (Edition 2024)
+- Programming Language: Rust (Edition 2021)
 
      - Alasan: Type-safe, Memory-safe (Borrow checker), High performance, Compiled.
 

@@ -1,3 +1,5 @@
 target/
 vscode/
 .env
+kafka_data/
+credentials.json
