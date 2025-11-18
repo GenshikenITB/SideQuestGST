@@ -37,3 +37,26 @@ pub async fn check_admin(ctx: Context<'_>) -> Result<bool, Error> {
     }
     Ok(true)
 }
+
+pub async fn check_quest_role(ctx: Context<'_>) -> Result<bool, Error> {
+    if !check_guild(ctx).await? {
+        return Ok(false);
+    }
+
+    let quest_role = ctx.data().qg_role_id;
+    let user = ctx.author_member().await.ok_or("Failed to get member")?;
+
+    let has_role = user.roles.contains(&quest_role);
+
+    let is_admin = user.permissions.map(|p| p.administrator()).unwrap_or(false);
+
+    if has_role || is_admin {
+        Ok(true)
+    } else {
+        ctx.send(poise::CreateReply::default()
+            .content("⛔ Access Denied: Only Staff can create quests.")
+            .ephemeral(true)
+        ).await?;
+        Ok(false)
+    }
+}

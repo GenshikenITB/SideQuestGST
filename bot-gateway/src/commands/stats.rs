@@ -5,7 +5,7 @@ use poise::CreateReply;
 type Context<'a> = poise::Context<'a, Data, Error>;
 
 #[poise::command(slash_command, check = "crate::security::check_guild")]
-pub async fn check_stats(ctx: Context<'_>) -> Result<(), Error> {
+pub async fn stats(ctx: Context<'_>) -> Result<(), Error> {
     ctx.defer_ephemeral().await?;
 
     let user_id = ctx.author().id.to_string();

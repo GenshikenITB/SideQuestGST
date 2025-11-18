@@ -12,14 +12,16 @@ use rdkafka::config::ClientConfig;
 use rdkafka::producer::FutureProducer;
 use std::env;
 use google_sheets4::{hyper, hyper_rustls, oauth2, Sheets};
+use serenity::{GuildId, RoleId};
 
 pub type HubType = Sheets<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>>;
 
 pub struct Data {
     pub kafka_producer: FutureProducer,
-    pub target_guild_id: serenity::GuildId,
+    pub target_guild_id: GuildId,
     pub sheets_hub: HubType,
     pub google_sheet_id: String,
+    pub qg_role_id: RoleId
 }
 
 pub type Error = Box<dyn std::error::Error + Send + Sync>;
@@ -29,7 +31,9 @@ async fn main() {
     dotenv::dotenv().ok();
     let token = env::var("DISCORD_TOKEN").expect("missing DISCORD_TOKEN");
     let guild_id_str = env::var("TARGET_GUILD_ID").expect("missing TARGET_GUILD_ID");
-    let guild_id = serenity::GuildId::new(guild_id_str.parse().expect("Invalid Guild ID"));
+    let guild_id = GuildId::new(guild_id_str.parse().expect("Invalid Guild ID"));
+    let quest_giver_str = env::var("QUEST_GIVER_ID").expect("missing QUEST_GIVER_ID");
+    let quest_giver_id = serenity::RoleId::new(quest_giver_str.parse().expect("Invalid Quest Giver ID"));
     let brokers = env::var("KAFKA_BROKERS").unwrap_or("kafka:9092".to_string());
 
     let sa_key_path = env::var("GOOGLE_APPLICATION_CREDENTIALS").unwrap_or("/app/credentials.json".to_string());
@@ -60,8 +64,8 @@ async fn main() {
             commands: vec![
                 commands::quest::create(), 
                 commands::quest::take(),
-                commands::quest::submit_proof(),
-                commands::stats::check_stats(),
+                commands::quest::submit(),
+                commands::stats::stats(),
                 commands::admin::register_community(),
             ],
             ..Default::default()
@@ -75,6 +79,7 @@ async fn main() {
                     target_guild_id: guild_id,
                     sheets_hub: hub,
                     google_sheet_id: sheet_id,
+                    qg_role_id: quest_giver_id
                 })
             })
         })
