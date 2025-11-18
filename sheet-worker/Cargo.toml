@@ -11,7 +11,6 @@ rdkafka = { version = "0.36", features = ["cmake-build"] }
 
 # Google Sheets API
 google-sheets4 = "5.0"
-yup-oauth2 = "8.3" # Untuk handle Service Account Authentication
 
 # Serialization & Utils
 serde = { version = "1.0", features = ["derive"] }
