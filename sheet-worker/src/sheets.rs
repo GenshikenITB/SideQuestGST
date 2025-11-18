@@ -15,6 +15,7 @@ pub async fn process_event(hub: &HubType, spreadsheet_id: &str, event: EventMess
                     json!(data.quest_id),
                     json!(data.title),
                     json!(data.category),
+                    json!(data.slots),
                     json!(data.organizer_name),
                     json!(data.schedule),
                     json!(data.platform),
@@ -64,6 +65,12 @@ pub async fn process_event(hub: &HubType, spreadsheet_id: &str, event: EventMess
                 update_participant_status(hub, spreadsheet_id, &data.quest_id, &data.user_id, "COMPLETED").await;
             }
         },
+
+        "DROP_QUEST" => {
+            if let Ok(data) = serde_json::from_str::<RegistrationPayload>(&event.payload) {
+                update_participant_status(hub, spreadsheet_id, &data.quest_id, &data.user_id, "DROPPED").await;
+            }
+        }
 
         _ => println!("Unknown event type: {}", event.event_type),
     }

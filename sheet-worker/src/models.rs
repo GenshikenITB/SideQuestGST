@@ -11,6 +11,7 @@ pub struct QuestPayload {
     pub quest_id: String,
     pub title: String,
     pub category: String,
+    pub slots: i8,
     pub deadline: String,
     pub organizer_name: String,
     pub description: String,
