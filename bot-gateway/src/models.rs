@@ -34,6 +34,7 @@ pub struct QuestPayload {
     pub description: String,
     pub category: String,
     pub organizer_name: String,
+    pub slots: i8,
     pub schedule: String,
     pub platform: String,
     pub deadline: String,
