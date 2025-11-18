@@ -1,0 +1,57 @@
+version: '3.8'
+
+services:
+  kafka:
+    image: bitnami/kafka:latest
+    container_name: gst-kafka
+    restart: unless-stopped
+    ports:
+      - "59092:9092"
+    environment:
+      - KAFKA_CFG_NODE_ID=0
+      - KAFKA_CFG_PROCESS_ROLES=controller,broker
+      - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=0@kafka:9093
+      - KAFKA_CFG_LISTENERS=INTERNAL://:9093,EXTERNAL://:9092,CONTROLLER://:9094
+      - KAFKA_CFG_ADVERTISED_LISTENERS=INTERNAL://kafka:9093,EXTERNAL://localhost:59092
+      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
+      - KAFKA_CFG_INTER_BROKER_LISTENER_NAME=INTERNAL
+      - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
+      - KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE=true
+    volumes:
+      - kafka_data:/bitnami/kafka
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-topics.sh --bootstrap-server localhost:9092 --list"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  bot-gateway:
+    build: ./bot-gateway
+    container_name: gst-bot-gateway
+    restart: unless-stopped
+    environment:
+      - DISCORD_TOKEN=${DISCORD_TOKEN}
+      - KAFKA_BROKERS=kafka:9093
+      - TARGET_GUILD_ID=${TARGET_GUILD_ID}
+      - RUST_LOG=info
+    depends_on:
+      kafka:
+        condition: service_healthy
+
+  sheet-worker:
+    build: ./sheet-worker
+    container_name: gst-sheet-worker
+    restart: unless-stopped
+    environment:
+      - KAFKA_BROKERS=kafka:9093
+      - GOOGLE_SHEET_ID=${GOOGLE_SHEET_ID}
+      - GOOGLE_APPLICATION_CREDENTIALS=/app/credentials.json
+      - RUST_LOG=info
+    volumes:
+      - ./credentials.json:/app/credentials.json:ro
+    depends_on:
+      kafka:
+        condition: service_healthy
+
+volumes:
+  kafka_data:

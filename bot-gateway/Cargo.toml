@@ -1,0 +1,22 @@
+[package]
+name = "gst-quest-bot"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+# Asynchronous Runtime
+tokio = { version = "1.36", features = ["macros", "rt-multi-thread"] }
+
+# Discord Framework
+poise = "0.6" 
+serenity = "0.12" # Poise 0.6 uses Serenity 0.12
+
+# Kafka Client
+# "cmake-build" ensures librdkafka is built from source within the container
+rdkafka = { version = "0.36", features = ["cmake-build"] }
+
+# Serialization & Utilities
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+uuid = { version = "1.7", features = ["v4"] }
+dotenv = "0.15"

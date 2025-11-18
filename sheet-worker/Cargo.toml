@@ -1,0 +1,19 @@
+[package]
+name = "gst-sheet-worker"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tokio = { version = "1.36", features = ["macros", "rt-multi-thread"] }
+
+# Kafka Client
+rdkafka = { version = "0.36", features = ["cmake-build"] }
+
+# Google Sheets API
+google-sheets4 = "5.0"
+yup-oauth2 = "8.3" # Untuk handle Service Account Authentication
+
+# Serialization & Utils
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+dotenv = "0.15"
