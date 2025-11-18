@@ -4,6 +4,7 @@ mod commands {
     pub mod quest;
     pub mod admin;
     pub mod stats;
+    pub mod list;
 }
 mod security;
 
