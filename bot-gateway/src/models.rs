@@ -54,6 +54,13 @@ pub struct NewCommunityPayload {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+pub struct ProofPayload {
+    pub quest_id: String,
+    pub user_id: String,
+    pub proof_url: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct EventMessage {
     pub event_type: String,
     pub payload: String,

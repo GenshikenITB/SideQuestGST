@@ -1,9 +1,9 @@
 use crate::{Data, Error};
-use crate::models::{QuestPayload, QuestCategory, Division, RegistrationPayload};
+use crate::models::{QuestPayload, QuestCategory, Division, RegistrationPayload, ProofPayload};
 use crate::kafka::produce_event;
 use poise::Modal as _;
 use poise::CreateReply;
-use serenity::all::{CreateEmbed, CreateEmbedFooter};
+use serenity::all::{CreateEmbed, CreateEmbedFooter, Attachment};
 use chrono::{TimeZone, NaiveDateTime, FixedOffset};
 use chrono::DateTime;
 
@@ -159,6 +159,35 @@ pub async fn take(
     };
 
     produce_event(ctx, "TAKE_QUEST", &payload).await?;
-    ctx.say("✅ Request ambil quest terkirim.").await?;
+    ctx.say("✅ Successfully taken quest.").await?;
+    Ok(())
+}
+
+#[poise::command(slash_command, check = "crate::security::check_guild")]
+pub async fn submit_proof(
+    ctx: Context<'_>,
+    #[description = "Taken Quest ID"] quest_id: String,
+    #[description = "Upload Proof"] proof_image: Attachment,
+) -> Result<(), Error> {
+
+    if let Some(ctype) = &proof_image.content_type {
+        if !ctype.starts_with("image/") {
+            ctx.say("❌ Please upload an image (jpg/png).").await?;
+            return Ok(());
+        }
+    } else {
+        ctx.say("❌ Invalid file.").await?;
+        return Ok(());
+    }
+
+    let payload = ProofPayload {
+        quest_id: quest_id.clone(),
+        user_id: ctx.author().id.to_string(),
+        proof_url: proof_image.url.clone(),
+    };
+
+    produce_event(ctx, "SUBMIT_PROOF", &payload).await?;
+
+    ctx.say(format!("✅ Proof for quest `{}` has been successfully submitted.", quest_id)).await?;
     Ok(())
 }
