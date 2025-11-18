@@ -19,7 +19,7 @@ fn parse_wib(input: &str) -> Result<String, String> {
     Ok(dt_wib.to_rfc3339())
 }
 
-#[poise::command(slash_command, check = "crate::security::check_guild")] 
+#[poise::command(slash_command, check = "crate::security::check_quest_role")] 
 pub async fn create(
     ctx: Context<'_>,
     
@@ -136,7 +136,7 @@ pub async fn create(
                  .field("📍 Location", &payload.platform, true)
                  .field("ID", &quest_id, false)
                  .color(0xF1C40F)
-                 .footer(CreateEmbedFooter::new("Use /take_quest <id> to take the quest"))
+                 .footer(CreateEmbedFooter::new("Use /take <id> to take the quest"))
             )
         ).await?;
 
@@ -164,7 +164,7 @@ pub async fn take(
 }
 
 #[poise::command(slash_command, check = "crate::security::check_guild")]
-pub async fn submit_proof(
+pub async fn submit(
     ctx: Context<'_>,
     #[description = "Taken Quest ID"] quest_id: String,
     #[description = "Upload Proof"] proof_image: Attachment,
