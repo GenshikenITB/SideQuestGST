@@ -1,0 +1,88 @@
+name: CI/CD SideQuest Platform
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  ci:
+    name: Build and Test Rust Services
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          ref: main 
+
+      - name: Setup Environment Variables
+        run: |
+          echo "DISCORD_TOKEN=mock_token" >> .env
+          echo "TARGET_GUILD_ID=11111" >> .env
+          echo "GOOGLE_SHEET_ID=mock_sheet_id" >> .env
+          echo "STAFF_ROLE_ID=22222" >> .env
+        
+      - name: Install Rust Toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          override: true
+
+      - name: Cache dependencies (bot-gateway)
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            bot-gateway/target
+          key: ${{ runner.os }}-cargo-gateway-${{ hashFiles('bot-gateway/Cargo.lock') }}
+
+      - name: Cache dependencies (sheet-worker)
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            sheet-worker/target
+          key: ${{ runner.os }}-cargo-worker-${{ hashFiles('sheet-worker/Cargo.lock') }}
+
+      - name: Build Rust Services
+        run: |
+          cargo build --release --manifest-path bot-gateway/Cargo.toml
+          cargo build --release --manifest-path sheet-worker/Cargo.toml
+          
+  deploy:
+    name: Deploy to VPS
+    needs: ci
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout Repo
+        uses: 'actions/checkout@v4'
+        with:
+          ref: main
+          token: ${{ secrets.PERSONAL_GITHUB_TOKEN }}
+
+      - name: SSH to VPS and Deploy
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.VPS_IP }}
+          username: ${{ secrets.VPS_USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            echo "Setting Git credential helper..."
+            git config --global url."https://${{ secrets.PERSONAL_GITHUB_TOKEN }}:@github.com".insteadOf "https://github.com"
+
+            echo "Changing directory to project root..."
+            cd ~/SideQuestGST/
+
+            echo "Pulling latest code from main..."
+            git checkout main
+            git pull origin main
+
+            echo "Building and restarting Docker containers..."
+            docker compose up -d --build
+            
+            echo "Deployment finished."
