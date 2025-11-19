@@ -273,17 +273,6 @@ pub async fn edit(
         }
     };
 
-    ctx.send(CreateReply::default()
-        .embed(CreateEmbed::default()
-            .title(format!("✏️ Editing Quest: {}", existing_title))
-            .field("ID", &quest_id, false)
-            .field("Current Slots", &existing_slots, true)
-            .field("Current Start", &existing_schedule, true)
-            .field("Current Platform", &existing_platform, true)
-            .color(0x3498DB)
-        )
-    ).await?;
-
     let modal_data = EditModal::execute(app_ctx).await?;
 
     if let Some(data) = modal_data {
