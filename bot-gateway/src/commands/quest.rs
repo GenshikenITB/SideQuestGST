@@ -34,11 +34,11 @@ async fn get_quest_and_participant_data(hub: &HubType, sheet_id: &str, quest_id:
     let mut found = false;
 
     if let Some(q_rows) = &value_ranges[0].values {
-        for row in q_rows {
+        for row in q_rows.iter().skip(1) {
             if row.len() >= 9 && row[0].as_str().unwrap_or("") == quest_id {
                 quest_title = row[1].as_str().unwrap_or("Unknown").to_string();
-                max_slots = row[8].as_str().unwrap_or("0").parse::<i8>().unwrap_or(0);
-                schedule_iso = Some(row[4].as_str().unwrap_or("").to_string());
+                max_slots = row[3].as_str().unwrap_or("0").parse::<i8>().unwrap_or(0);
+                schedule_iso = Some(row[6].as_str().unwrap_or("").to_string());
                 found = true;
                 break;
             }
