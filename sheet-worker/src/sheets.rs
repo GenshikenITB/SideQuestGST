@@ -34,25 +34,43 @@ pub async fn process_event(hub: &HubType, spreadsheet_id: &str, event: EventMess
             if let Ok(data) = serde_json::from_str::<EditPayload>(&event.payload) {
                 match find_row_index(hub, spreadsheet_id, "Quests!A:A", &data.quest_id).await {
                     Ok(Some(row_number)) => {
-                        let values = vec![vec![
-                            json!(data.title),
-                            json!(serde_json::Value::Null),
-                            json!(data.slots),
-                            json!(serde_json::Value::Null),
-                            json!(data.schedule),
-                            json!(data.platform),
-                            json!(data.description),
-                            json!(data.deadline),
-                        ]];
+                        // read full row so we can do a safe read-modify-write (avoid writing nulls)
+                        let read_range = format!("Quests!A{}:J{}", row_number, row_number);
+                        match hub.spreadsheets().values_get(spreadsheet_id, &read_range).doit().await {
+                            Ok((_, vr)) => {
+                                // prepare existing row with 10 columns (A..J)
+                                let mut existing: Vec<String> = vec!["".to_string(); 10];
+                                if let Some(rows) = vr.values {
+                                    if let Some(first_row) = rows.get(0) {
+                                        for (i, cell) in first_row.iter().enumerate().take(10) {
+                                            existing[i] = cell.as_str().unwrap_or("").to_string();
+                                        }
+                                    }
+                                }
 
-                        let update_range = format!("Quests!B{}:I{}", row_number, row_number);
-                        let req = ValueRange { values: Some(values), ..Default::default() };
-                        match hub.spreadsheets().values_update(req, spreadsheet_id, &update_range)
-                            .value_input_option("RAW")
-                            .doit().await {
-                                Ok(_) => println!("✅ Edited quest {} at row {}", data.quest_id, row_number),
-                                Err(e) => eprintln!("Failed to apply edit to sheet: {:?}", e),
+                                // column mapping (0-based):
+                                // 0: quest_id, 1: title, 2: category, 3: slots, 4: organizer_name,
+                                // 5: schedule, 6: platform, 7: description, 8: deadline, 9: created_at
+                                existing[1] = data.title;
+                                existing[3] = data.slots.to_string();
+                                existing[5] = data.schedule;
+                                existing[6] = data.platform;
+                                existing[7] = data.description;
+                                existing[8] = data.deadline;
+
+                                // write back the full updated row (A..J)
+                                let values_json = vec![existing.iter().map(|s| serde_json::Value::String(s.clone())).collect::<Vec<_>>()];
+                                let req = ValueRange { values: Some(values_json), ..Default::default() };
+                                let write_range = read_range;
+                                match hub.spreadsheets().values_update(req, spreadsheet_id, &write_range)
+                                    .value_input_option("RAW")
+                                    .doit().await {
+                                    Ok(_) => println!("✅ Applied edit to quest {} at row {}", data.quest_id, row_number),
+                                    Err(e) => eprintln!("Failed to apply edit to sheet: {:?}", e),
+                                }
                             }
+                            Err(e) => eprintln!("Failed to read existing quest row for {}: {:?}", data.quest_id, e),
+                        }
                     }
                     Ok(None) => eprintln!("EDIT_QUEST: Quest id {} not found", data.quest_id),
                     Err(e) => eprintln!("EDIT_QUEST lookup error: {:?}", e),
