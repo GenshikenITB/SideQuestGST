@@ -30,7 +30,7 @@ pub async fn list(ctx: Context<'_>) -> Result<(), Error> {
 
             let mut participant_counts: HashMap<String, i8> = HashMap::new();
             
-            for row in p_rows {
+            for row in p_rows.iter().skip(1) {
                 if row.len() >= 4 {
                     let q_id = row[0].as_str().unwrap_or("");
                     let status = row[3].as_str().unwrap_or("").to_uppercase();
@@ -43,13 +43,13 @@ pub async fn list(ctx: Context<'_>) -> Result<(), Error> {
 
             let mut display_quests: Vec<(String, String, String, i64, i8, i8)> = Vec::new();
 
-            for row in q_rows {
+            for row in q_rows.iter().skip(1) {
                 if row.len() >= 9 {
                     let q_id = row[0].as_str().unwrap_or("").to_string();
                     let title = row[1].as_str().unwrap_or("No Title").to_string();
-                    let organizer = row[3].as_str().unwrap_or("-").to_string();
-                    let schedule_str = row[4].as_str().unwrap_or("");
-                    let max_slots = row[8].as_str().unwrap_or("0").parse::<i8>().unwrap_or(0);
+                    let organizer = row[4].as_str().unwrap_or("-").to_string();
+                    let schedule_str = row[6].as_str().unwrap_or("");
+                    let max_slots = row[3].as_str().unwrap_or("0").parse::<i8>().unwrap_or(0);
 
                     if q_id == "Quest ID" || q_id.is_empty() { continue; }
 

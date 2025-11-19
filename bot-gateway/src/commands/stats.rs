@@ -35,7 +35,7 @@ pub async fn stats(ctx: Context<'_>) -> Result<(), Error> {
                     if row.len() >= 5 {
                         let q_id = row[0].as_str().unwrap_or("").to_string();
                         let title = row[1].as_str().unwrap_or("Unknown Title").to_string();
-                        let organizer = row[3].as_str().unwrap_or("Unknown").to_string();
+                        let organizer = row[4].as_str().unwrap_or("Unknown").to_string();
                         quest_map.insert(q_id, (title, organizer));
                     }
                 }
