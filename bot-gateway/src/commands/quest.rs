@@ -66,6 +66,23 @@ async fn get_quest_and_participant_data(hub: &HubType, sheet_id: &str, quest_id:
     Ok((max_slots, current_participants, schedule_iso, quest_title))
 }
 
+pub fn determine_organizer(category: QuestCategory, division: Division, community_name: Option<String>) -> Result<String, String> {
+    match category {
+        QuestCategory::CreativeArts => {
+            if let Division::None = division {
+                return Err("Error: Expected Division Name.".to_string());
+            }
+            Ok(format!("{:?}", division))
+        },
+        QuestCategory::Community => {
+            match community_name {
+                Some(name) if !name.trim().is_empty() => Ok(name),
+                _ => Err("Error: Expected Community Name.".to_string()),
+                }
+            }
+        }
+}
+
 #[poise::command(slash_command, description_localized("en-US", "Create a new quest"), check = "crate::security::check_quest_role")] 
 pub async fn create(
     ctx: Context<'_>,
@@ -80,22 +97,11 @@ pub async fn create(
     community_name: Option<String>,
 
 ) -> Result<(), Error> {
-    let organizer_final = match category {
-        QuestCategory::CreativeArts => {
-            if let Division::None = division {
-                ctx.say("❌ Error: Expected Division Name.").await?;
-                return Ok(());
-            }
-            format!("{:?}", division) 
-        },
-        QuestCategory::Community => {
-            match community_name {
-                Some(name) => name,
-                None => {
-                    ctx.say("❌ Error: Expected Community Name.").await?;
-                    return Ok(());
-                }
-            }
+    let organizer_final = match determine_organizer(category, division, community_name) {
+        Ok(org) => org,
+        Err(msg) => {
+            ctx.send(CreateReply::default().content(format!("❌ {}", msg)).ephemeral(true)).await?;
+            return Ok(());
         }
     };
 
@@ -613,4 +619,49 @@ pub async fn submit(
 
     ctx.say(format!("✅ Proof for quest `{}` has been successfully submitted.", quest_id)).await?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_wib_valid() {
+        let input = "2025-11-20 19:00";
+        let result = parse_wib(input);
+        assert!(result.is_ok());
+        let iso = result.unwrap();
+        assert!(iso.contains("2025-11-20T19:00:00+07:00"));
+    }
+
+    #[test]
+    fn test_parse_wib_invalid_format() {
+        let input = "2025/11/20 19:00";
+        let result = parse_wib(input);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_determine_organizer_creative_valid() {
+        let res = determine_organizer(QuestCategory::CreativeArts, Division::Illust, None);
+        assert_eq!(res.unwrap(), "Illust");
+    }
+
+    #[test]
+    fn test_determine_organizer_creative_invalid() {
+        let res = determine_organizer(QuestCategory::CreativeArts, Division::None, None);
+        assert!(res.is_err());
+    }
+
+    #[test]
+    fn test_determine_organizer_community_valid() {
+        let res = determine_organizer(QuestCategory::Community, Division::None, Some("GenBalok".to_string()));
+        assert_eq!(res.unwrap(), "GenBalok");
+    }
+
+    #[test]
+    fn test_determine_organizer_community_invalid() {
+        let res = determine_organizer(QuestCategory::Community, Division::None, None);
+        assert!(res.is_err());
+    }
 }
