@@ -221,6 +221,7 @@ pub async fn edit(
     let mut existing_platform = String::new();
     let mut existing_schedule = String::new();
     let mut existing_deadline = String::new();
+    let mut existing_description = String::new();
     let mut found = false;
 
     if let Some(rows) = res.1.values {
@@ -231,6 +232,7 @@ pub async fn edit(
                 existing_platform = row.get(4).and_then(|v| v.as_str()).unwrap_or("").to_string();
                 existing_schedule = row.get(5).and_then(|v| v.as_str()).unwrap_or("").to_string();
                 existing_deadline = row.get(6).and_then(|v| v.as_str()).unwrap_or("").to_string();
+                existing_description = row.get(7).and_then(|v| v.as_str()).unwrap_or("").to_string();
                 found = true;
                 break;
             }
@@ -259,7 +261,7 @@ pub async fn edit(
         #[name = "Participant Slots (optional)"]
         slots: String,
 
-        #[name = "Start Time (YYYY-MM-DD HH:MM)"]
+        #[name = "Start Time (YYYY-MM-DD HH:MM) (optional)"]
         schedule: String,
 
         #[name = "Deadline (YYYY-MM-DD HH:MM) (optional)"]
@@ -279,16 +281,18 @@ pub async fn edit(
     let modal_data = EditModal::execute(app_ctx).await?;
 
     if let Some(data) = modal_data {
-        // Parse description/platform input
-        let (description, platform) = {
-            let parts: Vec<&str> = data.description_and_platform.splitn(2, '\n').collect();
-            let platform = if parts.get(0).map(|s| s.trim()).unwrap_or("") == "" {
-                existing_platform.clone()
+        let (description_provided, platform_provided) = {
+            let raw = data.description_and_platform.trim();
+            if raw.is_empty() {
+                (None, None)
             } else {
-                parts[0].trim().to_string()
-            };
-            let description = parts.get(1).map(|s| s.trim().to_string()).unwrap_or_default();
-            (description, platform)
+                let parts: Vec<&str> = raw.splitn(2, '\n').collect();
+                let plat = parts.get(0).map(|s| s.trim()).unwrap_or("").to_string();
+                let desc = parts.get(1).map(|s| s.trim()).unwrap_or("").to_string();
+                let plat_opt = if plat.is_empty() { None } else { Some(plat) };
+                let desc_opt = if desc.is_empty() { None } else { Some(desc) };
+                (desc_opt, plat_opt)
+            }
         };
 
         let new_title = if data.title.trim().is_empty() {
@@ -296,6 +300,9 @@ pub async fn edit(
         } else {
             data.title.trim().to_string()
         };
+
+        let new_description = description_provided.unwrap_or_else(|| existing_description.clone());
+        let new_platform = platform_provided.unwrap_or_else(|| existing_platform.clone());
 
         let new_slots: i8 = if data.slots.trim().is_empty() {
             existing_slots.parse::<i8>().unwrap_or(0)
@@ -356,11 +363,11 @@ pub async fn edit(
         let edit_payload = EditPayload {
             quest_id: quest_id.clone(),
             title: new_title.clone(),
-            description: description.clone(),
+            description: new_description.clone(),
             slots: new_slots,
             schedule: new_schedule_iso.clone(),
             deadline: new_deadline_iso.clone(),
-            platform: platform.clone(),
+            platform: new_platform.clone(),
         };
 
         produce_event(ctx, "EDIT_QUEST", &edit_payload).await?;
@@ -375,7 +382,7 @@ pub async fn edit(
                 .description(&edit_payload.description)
                 .field("👥 Slots", format!("{}", new_slots), true)
                 .field("📅 Start Time", format!("<t:{}:f>", display_ts), true)
-                .field("📍 Location", &platform, true)
+                .field("📍 Location", &edit_payload.platform, true)
                 .field("ID", &quest_id, false)
                 .color(0x3498DB)
                 .footer(CreateEmbedFooter::new("Use /take <id> to take the quest"))
