@@ -211,8 +211,6 @@ pub async fn edit(
     #[description = "Quest ID to edit"]
     quest_id: String,
 ) -> Result<(), Error> {
-    ctx.defer_ephemeral().await?;
-
     let hub = &ctx.data().sheets_hub;
     let sheet_id = &ctx.data().google_sheet_id;
 
@@ -240,7 +238,9 @@ pub async fn edit(
     }
 
     if !found {
-        ctx.say(format!("❌ Quest ID `{}` not found.", quest_id)).await?;
+        ctx.send(CreateReply::default()
+                .content(format!("❌ Quest ID `{}` not found.", quest_id))
+                .ephemeral(true)).await?;
         return Ok(());
     }
 
@@ -268,7 +268,9 @@ pub async fn edit(
     let app_ctx = match ctx {
         poise::Context::Application(a) => a,
         _ => {
-            ctx.say("❌ Error: This command must be run as slash command.").await?;
+            ctx.send(CreateReply::default()
+                .content("❌ Error: This command must be run as slash command.")
+                .ephemeral(true)).await?;
             return Ok(());
         }
     };
@@ -300,7 +302,9 @@ pub async fn edit(
             match data.slots.trim().parse::<i8>() {
                 Ok(s) => s,
                 Err(_) => {
-                    ctx.say("❌ Invalid slots number.").await?;
+                    ctx.send(CreateReply::default()
+                        .content("❌ Invalid slots number.")
+                        .ephemeral(true)).await?;
                     return Ok(());
                 }
             }
@@ -308,7 +312,9 @@ pub async fn edit(
 
         let new_schedule_iso = if data.schedule.trim().is_empty() {
             if existing_schedule.is_empty() {
-                ctx.say("❌ Existing schedule missing; please provide a start time.").await?;
+                ctx.send(CreateReply::default()
+                    .content("❌ Existing schedule missing; please provide a start time.")
+                    .ephemeral(true)).await?;
                 return Ok(());
             } else {
                 existing_schedule.clone()
@@ -317,7 +323,9 @@ pub async fn edit(
             match parse_wib(&data.schedule) {
                 Ok(iso) => iso,
                 Err(msg) => {
-                    ctx.say(format!("❌ Schedule Error: {}", msg)).await?;
+                    ctx.send(CreateReply::default()
+                        .content(format!("❌ Schedule Error: {}", msg))
+                        .ephemeral(true)).await?;
                     return Ok(());
                 }
             }
@@ -328,7 +336,9 @@ pub async fn edit(
                 match parse_wib(&d) {
                     Ok(iso) => iso,
                     Err(msg) => {
-                        ctx.say(format!("❌ Deadline Error: {}", msg)).await?;
+                        ctx.send(CreateReply::default()
+                            .content(format!("❌ Deadline Error: {}", msg))
+                            .ephemeral(true)).await?;
                         return Ok(());
                     }
                 }
