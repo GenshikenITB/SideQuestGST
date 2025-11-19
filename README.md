@@ -168,16 +168,50 @@ Contributions are welcome. Suggested workflow:
 3. Run and test locally.
 4. Submit a pull request with a concise description of your changes.
 
-## Notes / Next steps
+## Commands
 
-- Add unit/integration tests for command handlers and sheets interactions.
-- Add CI that builds both crates and runs linters.
-- Add a LICENSE file to clarify project licensing.
+All bot commands are implemented as slash commands. Times must use the format `YYYY-MM-DD HH:MM` and are interpreted as WIB (UTC+7). Quest IDs are UUIDs shown in the bot embeds and in `/list`.
 
----
+- `/create` (Quest-role or admins)
+  - Opens a modal to create a quest.
+  - Slash options: `category` (select), `division` (select), `community_name` (optional if category is Community).
+  - Modal fields: Quest Name, Description & Platform/Location (first line = platform), Participant Slots, Start Time, Deadline (optional).
+  - The bot posts an embed with the generated quest ID. Footer: "Use /take <id> to take the quest".
 
-If you'd like, I can also:
-- Add a short `Makefile` or `./scripts` helpers for common commands (start, stop, logs).
-- Add a CONTRIBUTING.md and a basic CI workflow for building the Rust crates.
+- `/edit <quest_id>` (Quest-role or admins)
+  - Opens a modal to edit an existing quest. Leave fields empty to keep current values.
+  - Modal fields: New Title, Description & Platform/Location, Participant Slots, Start Time, Deadline.
 
-`README.md` created at project root. Happy to refine wording or add screenshots/examples of commands you want highlighted.
+- `/delete <quest_id>` (Quest-role or admins)
+  - Sends a delete request for the quest. The bot verifies the quest exists before sending the request.
+
+- `/take <quest_id>` (Guild members)
+  - Register yourself as a participant for the quest.
+  - Bot checks current participants and available slots; returns confirmation or error (already taken / full).
+
+- `/drop <quest_id>` (Guild members)
+  - Drop a quest you previously took. Only allowed when the participant status is `ON_PROGRESS` and before the quest start time.
+
+- `/submit <quest_id> <attachment:image>` (Guild members)
+  - Submit image proof for a taken quest. Only accepts image attachments (jpg/png/etc.). Produces a submit event with the attachment URL.
+
+- `/list` (Guild members)
+  - Shows the quest board in a paginated view with title, quest ID, slots status, organizer and start time.
+
+- `/stats` (Guild members)
+  - Sends a DM to the user with their active/completed/failed quest counts and active quest list.
+
+- `/help` (Guild members)
+  - Shows the help for all available commands.
+
+- `/register_community <name> [leader]` (Admins only)
+  - Admin command to register a new community. Produces a `REGISTER_COMMUNITY` event.
+
+How to find a quest ID:
+- The quest ID is shown in the quest embed created by `/create` and in entries printed by `/list`. Copy that UUID for use with `/take`, `/drop`, `/edit`, or `/delete`.
+
+Common errors & tips:
+- "This command doesnt work on DMs" — run the command in the target guild/server.
+- "Access Denied" for staff commands — ensure you have the configured quest staff role or Administrator permission.
+- Wrong time format — use exactly `YYYY-MM-DD HH:MM` (16 chars) and include minutes.
+- For `/submit` attach an image file; other file types are rejected.

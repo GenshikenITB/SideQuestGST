@@ -54,7 +54,7 @@ pub async fn check_quest_role(ctx: Context<'_>) -> Result<bool, Error> {
         Ok(true)
     } else {
         ctx.send(poise::CreateReply::default()
-            .content("⛔ Access Denied: Only Staff can create quests.")
+            .content("⛔ Access Denied: Only Staff with QuestRole can create quests.")
             .ephemeral(true)
         ).await?;
         Ok(false)

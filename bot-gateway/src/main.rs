@@ -5,6 +5,7 @@ mod commands {
     pub mod admin;
     pub mod stats;
     pub mod list;
+    pub mod general;
 }
 mod security;
 
@@ -72,6 +73,7 @@ async fn main() {
                 commands::stats::stats(),
                 commands::list::list(),
                 commands::admin::register_community(),
+                commands::general::help(),
             ],
             ..Default::default()
         })
