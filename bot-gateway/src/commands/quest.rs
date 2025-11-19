@@ -1,5 +1,8 @@
 use crate::{Data, Error, HubType};
-use crate::models::{QuestPayload, QuestCategory, Division, RegistrationPayload, ProofPayload};
+use crate::models::{QuestPayload, QuestCategory, Division,
+                     RegistrationPayload, ProofPayload, 
+                     EditPayload, DeletePayload
+                    };
 use crate::kafka::produce_event;
 use poise::Modal as _;
 use poise::CreateReply;
@@ -38,7 +41,7 @@ async fn get_quest_and_participant_data(hub: &HubType, sheet_id: &str, quest_id:
             if row.len() >= 9 && row[0].as_str().unwrap_or("") == quest_id {
                 quest_title = row[1].as_str().unwrap_or("Unknown").to_string();
                 max_slots = row[3].as_str().unwrap_or("0").parse::<i8>().unwrap_or(0);
-                schedule_iso = Some(row[6].as_str().unwrap_or("").to_string());
+                schedule_iso = Some(row[5].as_str().unwrap_or("").to_string());
                 found = true;
                 break;
             }
@@ -186,6 +189,7 @@ pub async fn create(
                  .description(&payload.description)
                  .field("📁 Category", &payload.category, true)
                  .field("🛡️ By", &payload.organizer_name, true)
+                 .field("👥 Slots", &data.slots, true)
                  .field("📅 Start Time", format!("<t:{}:f>", display_ts), true)
                  .field("📍 Location", &payload.platform, true)
                  .field("ID", &quest_id, false)
@@ -197,6 +201,239 @@ pub async fn create(
         produce_event(ctx, "CREATE_QUEST", &payload).await?;
     }
 
+    Ok(())
+}
+
+#[poise::command(slash_command, check = "crate::security::check_quest_role")] 
+pub async fn edit(
+    ctx: Context<'_>,
+    
+    #[description = "Quest ID to edit"]
+    quest_id: String,
+) -> Result<(), Error> {
+    ctx.defer_ephemeral().await?;
+
+    let hub = &ctx.data().sheets_hub;
+    let sheet_id = &ctx.data().google_sheet_id;
+
+    // Fetch existing quest data
+    let res = hub.spreadsheets().values_get(sheet_id, "Quests!A:I").doit().await?;
+    let mut existing_title = String::new();
+    let mut existing_slots = String::new();
+    let mut existing_platform = String::new();
+    let mut existing_schedule = String::new();
+    let mut existing_deadline = String::new();
+    let mut found = false;
+
+    if let Some(rows) = res.1.values {
+        for row in rows.iter().skip(1) {
+            if row.len() >= 1 && row[0].as_str().unwrap_or("") == quest_id {
+                existing_title = row.get(1).and_then(|v| v.as_str()).unwrap_or("").to_string();
+                existing_slots = row.get(3).and_then(|v| v.as_str()).unwrap_or("").to_string();
+                existing_platform = row.get(4).and_then(|v| v.as_str()).unwrap_or("").to_string();
+                existing_schedule = row.get(5).and_then(|v| v.as_str()).unwrap_or("").to_string();
+                existing_deadline = row.get(6).and_then(|v| v.as_str()).unwrap_or("").to_string();
+                found = true;
+                break;
+            }
+        }
+    }
+
+    if !found {
+        ctx.say(format!("❌ Quest ID `{}` not found.", quest_id)).await?;
+        return Ok(());
+    }
+
+    // Modal for editing (leave fields empty to keep existing)
+    #[derive(Debug, poise::Modal)]
+    #[name = "Edit Quest Details"]
+    struct EditModal {
+        #[name = "New Title (leave empty to keep current)"]
+        title: String,
+
+        #[name = "Description & Platform / Location\nRow 1: Platform (optional)\nRow 2+: Description (optional)"]
+        #[paragraph]
+        description_and_platform: String,
+
+        #[name = "Participant Slots (leave empty to keep current)"]
+        slots: String,
+
+        #[name = "Start Time (YYYY-MM-DD HH:MM) (leave empty to keep current)"]
+        schedule: String,
+
+        #[name = "Deadline (YYYY-MM-DD HH:MM) (leave empty to keep current)"]
+        deadline: Option<String>,
+    }
+
+    let app_ctx = match ctx {
+        poise::Context::Application(a) => a,
+        _ => {
+            ctx.say("❌ Error: This command must be run as slash command.").await?;
+            return Ok(());
+        }
+    };
+
+    ctx.send(CreateReply::default()
+        .embed(CreateEmbed::default()
+            .title(format!("✏️ Editing Quest: {}", existing_title))
+            .field("ID", &quest_id, false)
+            .field("Current Slots", &existing_slots, true)
+            .field("Current Start", &existing_schedule, true)
+            .field("Current Platform", &existing_platform, true)
+            .color(0x3498DB)
+        )
+    ).await?;
+
+    let modal_data = EditModal::execute(app_ctx).await?;
+
+    if let Some(data) = modal_data {
+        // Parse description/platform input
+        let (description, platform) = {
+            let parts: Vec<&str> = data.description_and_platform.splitn(2, '\n').collect();
+            let platform = if parts.get(0).map(|s| s.trim()).unwrap_or("") == "" {
+                existing_platform.clone()
+            } else {
+                parts[0].trim().to_string()
+            };
+            let description = parts.get(1).map(|s| s.trim().to_string()).unwrap_or_default();
+            (description, platform)
+        };
+
+        let new_title = if data.title.trim().is_empty() {
+            existing_title.clone()
+        } else {
+            data.title.trim().to_string()
+        };
+
+        let new_slots: i8 = if data.slots.trim().is_empty() {
+            existing_slots.parse::<i8>().unwrap_or(0)
+        } else {
+            match data.slots.trim().parse::<i8>() {
+                Ok(s) => s,
+                Err(_) => {
+                    ctx.say("❌ Invalid slots number.").await?;
+                    return Ok(());
+                }
+            }
+        };
+
+        let new_schedule_iso = if data.schedule.trim().is_empty() {
+            if existing_schedule.is_empty() {
+                ctx.say("❌ Existing schedule missing; please provide a start time.").await?;
+                return Ok(());
+            } else {
+                existing_schedule.clone()
+            }
+        } else {
+            match parse_wib(&data.schedule) {
+                Ok(iso) => iso,
+                Err(msg) => {
+                    ctx.say(format!("❌ Schedule Error: {}", msg)).await?;
+                    return Ok(());
+                }
+            }
+        };
+
+        let new_deadline_iso = match data.deadline {
+            Some(d) if !d.trim().is_empty() => {
+                match parse_wib(&d) {
+                    Ok(iso) => iso,
+                    Err(msg) => {
+                        ctx.say(format!("❌ Deadline Error: {}", msg)).await?;
+                        return Ok(());
+                    }
+                }
+            }
+            _ => {
+                if existing_deadline.is_empty() {
+                    new_schedule_iso.clone()
+                } else {
+                    existing_deadline.clone()
+                }
+            }
+        };
+
+        let edit_payload = EditPayload {
+            quest_id: quest_id.clone(),
+            title: new_title.clone(),
+            description: description.clone(),
+            slots: new_slots,
+            schedule: new_schedule_iso.clone(),
+            deadline: new_deadline_iso.clone(),
+            platform: platform.clone(),
+        };
+
+        produce_event(ctx, "EDIT_QUEST", &edit_payload).await?;
+
+        let display_ts = DateTime::parse_from_rfc3339(&new_schedule_iso)
+            .map(|dt| dt.timestamp())
+            .unwrap_or(0);
+
+        ctx.send(CreateReply::default()
+            .embed(CreateEmbed::default()
+                .title(format!("✏️ Quest Edited: {}", new_title))
+                .description(&edit_payload.description)
+                .field("👥 Slots", format!("{}", new_slots), true)
+                .field("📅 Start Time", format!("<t:{}:f>", display_ts), true)
+                .field("📍 Location", &platform, true)
+                .field("ID", &quest_id, false)
+                .color(0x3498DB)
+                .footer(CreateEmbedFooter::new("Use /take <id> to take the quest"))
+            )
+        ).await?;
+    }
+
+    Ok(())
+}
+
+#[poise::command(slash_command, check = "crate::security::check_quest_role")]
+pub async fn delete(
+    ctx: Context<'_>,
+    #[description = "Quest ID to delete"] quest_id: String,
+) -> Result<(), Error> {
+    ctx.defer_ephemeral().await?;
+    let hub = &ctx.data().sheets_hub;
+    let sheet_id = &ctx.data().google_sheet_id;
+
+    let lookup = hub
+        .spreadsheets()
+        .values_get(sheet_id, "Quests!A:A")
+        .doit()
+        .await;
+
+    match lookup {
+        Ok((_, range)) => {
+            let mut found = false;
+            if let Some(rows) = range.values {
+                for row in rows.iter().skip(1) {
+                    if row.len() >= 1 && row[0].as_str().unwrap_or("") == quest_id {
+                        found = true;
+                        break;
+                    }
+                }
+            }
+
+            if !found {
+                ctx.say(format!("❌ Quest ID `{}` not found.", quest_id)).await?;
+                return Ok(());
+            }
+        }
+        Err(e) => {
+            ctx.say(format!("❌ Failed to query sheet: {}", e)).await?;
+            return Ok(());
+        }
+    }
+
+    let payload = DeletePayload {
+        quest_id: quest_id.clone(),
+    };
+
+    if let Err(e) = produce_event(ctx, "DELETE_QUEST", &payload).await {
+        ctx.say(format!("❌ Failed to send delete request: {}", e)).await?;
+        return Ok(());
+    }
+
+    ctx.say(format!("✅ Delete request for quest `{}` sent.", quest_id)).await?;
     Ok(())
 }
 

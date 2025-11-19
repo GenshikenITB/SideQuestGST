@@ -1,6 +1,7 @@
-use google_sheets4::{api::ValueRange, hyper, hyper_rustls, Sheets, chrono};
+use google_sheets4::{hyper, hyper_rustls, Sheets, chrono};
+use google_sheets4::api::{ValueRange, BatchUpdateSpreadsheetRequest, Request, DeleteDimensionRequest, DimensionRange};
 use serde_json::json;
-use crate::models::{EventMessage, QuestPayload, RegistrationPayload, NewCommunityPayload, ProofPayload};
+use crate::models::{EventMessage, QuestPayload, RegistrationPayload, NewCommunityPayload, ProofPayload, EditPayload, DeletePayload};
 
 pub type HubType = Sheets<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>>;
 
@@ -26,6 +27,49 @@ pub async fn process_event(hub: &HubType, spreadsheet_id: &str, event: EventMess
                 append_to_sheet(hub, spreadsheet_id, "Quests!A1", values).await;
             } else {
                 eprintln!("Failed to parse CREATE_QUEST");
+            }
+        },
+
+        "EDIT_QUEST" => {
+            if let Ok(data) = serde_json::from_str::<EditPayload>(&event.payload) {
+                match find_row_index(hub, spreadsheet_id, "Quests!A:A", &data.quest_id).await {
+                    Ok(Some(row_number)) => {
+                        let values = vec![vec![
+                            json!(data.title),
+                            json!(serde_json::Value::Null),
+                            json!(data.slots),
+                            json!(serde_json::Value::Null),
+                            json!(data.schedule),
+                            json!(data.platform),
+                            json!(data.description),
+                            json!(data.deadline),
+                        ]];
+
+                        let update_range = format!("Quests!B{}:I{}", row_number, row_number);
+                        let req = ValueRange { values: Some(values), ..Default::default() };
+                        match hub.spreadsheets().values_update(req, spreadsheet_id, &update_range)
+                            .value_input_option("RAW")
+                            .doit().await {
+                                Ok(_) => println!("✅ Edited quest {} at row {}", data.quest_id, row_number),
+                                Err(e) => eprintln!("Failed to apply edit to sheet: {:?}", e),
+                            }
+                    }
+                    Ok(None) => eprintln!("EDIT_QUEST: Quest id {} not found", data.quest_id),
+                    Err(e) => eprintln!("EDIT_QUEST lookup error: {:?}", e),
+                }
+            } else {
+                eprintln!("Failed to parse EDIT_QUEST payload");
+            }
+        },
+
+        "DELETE_QUEST" => {
+            if let Ok(data) = serde_json::from_str::<DeletePayload>(&event.payload) {
+                match delete_quest_cascade(hub, spreadsheet_id, &data.quest_id).await {
+                    Ok(_) => println!("✅ Cascade deleted quest {}", data.quest_id),
+                    Err(e) => eprintln!("Failed to cascade delete quest {}: {:?}", data.quest_id, e),
+                }
+            } else {
+                eprintln!("Failed to parse DELETE_QUEST payload");
             }
         },
         
@@ -174,4 +218,87 @@ pub async fn check_deadlines_job(hub: &HubType, spreadsheet_id: &str) {
         }
     }
     println!("Deadline Check Finished.");
+}
+
+async fn find_row_index(hub: &HubType, spreadsheet_id: &str, range: &str, quest_id: &str) -> Result<Option<usize>, Box<dyn std::error::Error + Send + Sync>> {
+    let res = hub.spreadsheets().values_get(spreadsheet_id, range).doit().await?;
+    if let Some(vr) = res.1.values {
+        for (i, row) in vr.iter().enumerate().skip(1) {
+            if row.len() >= 1 && row[0].as_str().unwrap_or("") == quest_id {
+                return Ok(Some(i + 1));
+            }
+        }
+    }
+    Ok(None)
+}
+
+pub async fn delete_quest_cascade(hub: &HubType, spreadsheet_id: &str, quest_id: &str) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let (_, meta) = hub.spreadsheets().get(spreadsheet_id).doit().await?;
+    let sheets = meta.sheets.unwrap_or_default();
+
+    let mut quests_sheet_id: Option<i32> = None;
+    let mut participants_sheet_id: Option<i32> = None;
+    for s in sheets {
+        if let Some(props) = s.properties {
+            match props.title.as_deref() {
+                Some("Quests") => quests_sheet_id = props.sheet_id,
+                Some("Participants") => participants_sheet_id = props.sheet_id,
+                _ => {}
+            }
+        }
+    }
+
+    let q_sid = quests_sheet_id.ok_or("Quests sheet not found")?;
+    let p_sid = participants_sheet_id.ok_or("Participants sheet not found")?;
+
+    let q_rows = hub.spreadsheets().values_get(spreadsheet_id, "Quests!A:A").doit().await?;
+    let mut quests_row_index: Option<usize> = None;
+    if let Some(rows) = q_rows.1.values {
+        for (i, row) in rows.iter().enumerate().skip(1) {
+            if row.len() >= 1 && row[0].as_str().unwrap_or("") == quest_id {
+                quests_row_index = Some(i);
+                break;
+            }
+        }
+    }
+
+    if quests_row_index.is_none() {
+        return Err(format!("Quest ID `{}` not found in Quests", quest_id).into());
+    }
+
+    let p_rows_res = hub.spreadsheets().values_get(spreadsheet_id, "Participants!A:A").doit().await?;
+    let mut participant_row_indices: Vec<usize> = Vec::new();
+    if let Some(rows) = p_rows_res.1.values {
+        for (i, row) in rows.iter().enumerate().skip(1) {
+            if row.len() >= 1 && row[0].as_str().unwrap_or("") == quest_id {
+                participant_row_indices.push(i);
+            }
+        }
+    }
+
+    let mut requests: Vec<Request> = Vec::new();
+
+    participant_row_indices.sort_unstable_by(|a, b| b.cmp(a));
+    for idx in participant_row_indices {
+        let dr = DimensionRange {
+            sheet_id: Some(p_sid),
+            dimension: Some("ROWS".to_string()),
+            start_index: Some(idx as i32),
+            end_index: Some((idx + 1) as i32),
+        };
+        requests.push(Request { delete_dimension: Some(DeleteDimensionRequest { range: Some(dr) }), ..Default::default() });
+    }
+
+    let q_idx = quests_row_index.unwrap();
+    let q_dr = DimensionRange {
+        sheet_id: Some(q_sid),
+        dimension: Some("ROWS".to_string()),
+        start_index: Some(q_idx as i32),
+        end_index: Some((q_idx + 1) as i32),
+    };
+    requests.push(Request { delete_dimension: Some(DeleteDimensionRequest { range: Some(q_dr) }), ..Default::default() });
+
+    let batch = BatchUpdateSpreadsheetRequest { requests: Some(requests), ..Default::default() };
+    hub.spreadsheets().batch_update(batch, spreadsheet_id).doit().await?;
+    Ok(())
 }

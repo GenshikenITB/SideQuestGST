@@ -49,6 +49,22 @@ pub struct RegistrationPayload {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+pub struct EditPayload {
+    pub quest_id: String,
+    pub title: String,
+    pub description: String,
+    pub slots: i8,
+    pub schedule: String,
+    pub deadline: String,
+    pub platform: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct DeletePayload {
+    pub quest_id: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct NewCommunityPayload {
     pub community_name: String,
     pub leader_id: String,

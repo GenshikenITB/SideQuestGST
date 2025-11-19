@@ -38,3 +38,19 @@ pub struct ProofPayload {
     pub user_id: String,
     pub proof_url: String,
 }
+
+#[derive(Debug, Deserialize)]
+pub struct EditPayload {
+    pub quest_id: String,
+    pub title: String,
+    pub description: String,
+    pub slots: i8,
+    pub schedule: String,
+    pub deadline: String,
+    pub platform: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct DeletePayload {
+    pub quest_id: String,
+}

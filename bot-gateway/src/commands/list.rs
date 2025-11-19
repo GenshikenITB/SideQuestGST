@@ -48,7 +48,7 @@ pub async fn list(ctx: Context<'_>) -> Result<(), Error> {
                     let q_id = row[0].as_str().unwrap_or("").to_string();
                     let title = row[1].as_str().unwrap_or("No Title").to_string();
                     let organizer = row[4].as_str().unwrap_or("-").to_string();
-                    let schedule_str = row[6].as_str().unwrap_or("");
+                    let schedule_str = row[5].as_str().unwrap_or("");
                     let max_slots = row[3].as_str().unwrap_or("0").parse::<i8>().unwrap_or(0);
 
                     if q_id == "Quest ID" || q_id.is_empty() { continue; }
