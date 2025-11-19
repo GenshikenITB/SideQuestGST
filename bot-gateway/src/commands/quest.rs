@@ -176,10 +176,14 @@ pub async fn create(
             organizer_name: organizer_final,
             schedule: schedule_iso.clone(),
             platform: platform,
-            deadline: deadline_iso,
+            deadline: deadline_iso.clone(),
             creator_id: ctx.author().id.to_string(),
         };
         let display_ts = DateTime::parse_from_rfc3339(&schedule_iso)
+            .unwrap()
+            .timestamp();
+
+        let display_dl = DateTime::parse_from_rfc3339(&deadline_iso)
             .unwrap()
             .timestamp();
 
@@ -191,6 +195,7 @@ pub async fn create(
                  .field("🛡️ By", &payload.organizer_name, true)
                  .field("👥 Slots", &data.slots, true)
                  .field("📅 Start Time", format!("<t:{}:f>", display_ts), true)
+                 .field("⏰ Deadline", format!("<t:{}:f>", display_dl), true)
                  .field("📍 Location", &payload.platform, true)
                  .field("ID", &quest_id, false)
                  .color(0xF1C40F)
@@ -231,7 +236,7 @@ pub async fn edit(
                 existing_slots = row.get(3).and_then(|v| v.as_str()).unwrap_or("").to_string();
                 existing_platform = row.get(4).and_then(|v| v.as_str()).unwrap_or("").to_string();
                 existing_schedule = row.get(5).and_then(|v| v.as_str()).unwrap_or("").to_string();
-                existing_deadline = row.get(6).and_then(|v| v.as_str()).unwrap_or("").to_string();
+                existing_deadline = row.get(8).and_then(|v| v.as_str()).unwrap_or("").to_string();
                 existing_description = row.get(7).and_then(|v| v.as_str()).unwrap_or("").to_string();
                 found = true;
                 break;
@@ -388,12 +393,17 @@ pub async fn edit(
             .map(|dt| dt.timestamp())
             .unwrap_or(0);
 
+        let display_dl = DateTime::parse_from_rfc3339(&final_deadline)
+            .map(|dt| dt.timestamp())
+            .unwrap_or(0);
+
         ctx.send(CreateReply::default()
             .embed(CreateEmbed::default()
                 .title(format!("✏️ Quest Edited: {}", final_title))
                 .description(&edit_payload.description)
                 .field("👥 Slots", format!("{}", final_slots), true)
                 .field("📅 Start Time", format!("<t:{}:f>", display_ts), true)
+                .field("⏰ Deadline", format!("<t:{}:f>", display_dl), true)
                 .field("📍 Location", &edit_payload.platform, true)
                 .field("ID", &quest_id, false)
                 .color(0x3498DB)
