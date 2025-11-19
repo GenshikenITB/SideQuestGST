@@ -4,7 +4,6 @@ on:
   push:
     branches: [ main ]
 env:
-  GHCR_USERNAME: ${{ github.actor }}
   GHCR_REPOSITORY: SideQuestGST
 jobs:
   ci_build_and_push:
@@ -24,7 +23,13 @@ jobs:
           echo "TARGET_GUILD_ID=11111" >> .env
           echo "GOOGLE_SHEET_ID=mock_sheet_id" >> .env
           echo "STAFF_ROLE_ID=22222" >> .env
-        
+      
+      - name: Set Lowercase Tag Variables
+        id: set_lowercase_vars
+        run: |
+          echo "GHCR_ACTOR_LOWERCASE=$(echo ${{ github.actor }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+          echo "GHCR_REPO_LOWERCASE=$(echo ${{ env.GHCR_REPOSITORY }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+
       - name: Install Rust Toolchain
         uses: actions-rs/toolchain@v1
         with:
@@ -47,7 +52,7 @@ jobs:
         with:
           context: ./bot-gateway
           push: true
-          tags: ghcr.io/${{ env.GHCR_USERNAME }}/${{ env.GHCR_REPOSITORY }}/gst-quest-bot:latest
+          tags: ghcr.io/${{ env.GHCR_ACTOR_LOWERCASE }}/${{ env.GHCR_REPO_LOWERCASE }}/gst-quest-bot:latest
           cache-from: type=gha,scope=bot-gateway
           cache-to: type=gha,mode=max,scope=bot-gateway
 
@@ -56,7 +61,7 @@ jobs:
         with:
           context: ./sheet-worker
           push: true
-          tags: ghcr.io/${{ env.GHCR_USERNAME }}/${{ env.GHCR_REPOSITORY }}/gst-sheet-worker:latest
+          tags: ghcr.io/${{ env.GHCR_ACTOR_LOWERCASE }}/${{ env.GHCR_REPO_LOWERCASE }}/gst-sheet-worker:latest
           cache-from: type=gha,scope=sheet-worker
           cache-to: type=gha,mode=max,scope=sheet-worker
           
