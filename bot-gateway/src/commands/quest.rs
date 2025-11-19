@@ -253,7 +253,7 @@ pub async fn edit(
         #[name = "New Title (optional)"]
         title: Option<String>,
 
-        #[name = "Platform (first line) / Description (next lines) (optional)"]
+        #[name = "Description & Platform / Location (optional)"]
         #[paragraph]
         #[placeholder = "Line 1: Platform (optional)\nLine 2+: Description (optional)"]
         description_and_platform: Option<String>,
