@@ -10,9 +10,9 @@ RUN apt-get update && apt-get install -y \
     libsasl2-dev \
     && rm -rf /var/lib/apt/lists/*
 
-COPY Cargo.toml ./
+COPY Cargo.toml Cargo.lock ./
 RUN mkdir src && echo "fn main() {}" > src/main.rs
-RUN cargo build
+RUN cargo build --release
 RUN rm -rf src
 
 COPY src ./src
