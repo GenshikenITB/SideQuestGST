@@ -22,7 +22,8 @@ jobs:
           echo "DISCORD_TOKEN=mock_token" >> .env
           echo "TARGET_GUILD_ID=11111" >> .env
           echo "GOOGLE_SHEET_ID=mock_sheet_id" >> .env
-          echo "STAFF_ROLE_ID=22222" >> .env
+          echo "QUEST_GIVER_ID=22222" >> .env
+          echo "QUEST_PARTICIPANT_ID=66666" >> .env
       
       - name: Set Lowercase Tag Variables
         id: set_lowercase_vars
