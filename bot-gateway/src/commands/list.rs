@@ -4,7 +4,7 @@ use chrono::DateTime;
 
 type Context<'a> = poise::Context<'a, Data, Error>;
 
-#[poise::command(slash_command, check = "crate::security::check_guild")]
+#[poise::command(slash_command, description_localized("en-US", "**List** all available quests"), check = "crate::security::check_guild")]
 pub async fn list(ctx: Context<'_>) -> Result<(), Error> {
     ctx.defer().await?;
 

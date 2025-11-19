@@ -66,7 +66,7 @@ async fn get_quest_and_participant_data(hub: &HubType, sheet_id: &str, quest_id:
     Ok((max_slots, current_participants, schedule_iso, quest_title))
 }
 
-#[poise::command(slash_command, check = "crate::security::check_quest_role")] 
+#[poise::command(slash_command, description_localized("en-US", "**Create** a new quest"), check = "crate::security::check_quest_role")] 
 pub async fn create(
     ctx: Context<'_>,
     
@@ -209,7 +209,7 @@ pub async fn create(
     Ok(())
 }
 
-#[poise::command(slash_command, check = "crate::security::check_quest_role")] 
+#[poise::command(slash_command, description_localized("en-US", "**Edit** an existing quest"), check = "crate::security::check_quest_role")] 
 pub async fn edit(
     ctx: Context<'_>,
     
@@ -415,7 +415,7 @@ pub async fn edit(
     Ok(())
 }
 
-#[poise::command(slash_command, check = "crate::security::check_quest_role")]
+#[poise::command(slash_command, description_localized("en-US", "**Delete** a quest"), check = "crate::security::check_quest_role")]
 pub async fn delete(
     ctx: Context<'_>,
     #[description = "Quest ID to delete"] quest_id: String,
@@ -466,7 +466,8 @@ pub async fn delete(
     Ok(())
 }
 
-#[poise::command(slash_command, check = "crate::security::check_guild")]
+#[poise::command(slash_command, description_localized("en-US", "**Take** a quest from available quests"),
+                 check = "crate::security::check_guild", check = "crate::security::check_participant_role")]
 pub async fn take(
     ctx: Context<'_>,
     #[description = "Quest ID"] quest_id: String
@@ -511,7 +512,8 @@ pub async fn take(
     Ok(())
 }
 
-#[poise::command(slash_command, check = "crate::security::check_guild")]
+#[poise::command(slash_command, description_localized("en-US", "**Drop** a taken quest"),
+                 check = "crate::security::check_guild", check = "crate::security::check_participant_role")]
 pub async fn drop(
     ctx: Context<'_>,
     #[description = "Quest ID to drop"] quest_id: String
@@ -583,7 +585,8 @@ pub async fn drop(
     Ok(())
 }
 
-#[poise::command(slash_command, check = "crate::security::check_guild")]
+#[poise::command(slash_command, description_localized("en-US", "**Submit** a completed quest"),
+                 check = "crate::security::check_guild", check = "crate::security::check_participant_role")]
 pub async fn submit(
     ctx: Context<'_>,
     #[description = "Taken Quest ID"] quest_id: String,

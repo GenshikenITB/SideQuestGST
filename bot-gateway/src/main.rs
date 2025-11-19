@@ -23,7 +23,8 @@ pub struct Data {
     pub target_guild_id: GuildId,
     pub sheets_hub: HubType,
     pub google_sheet_id: String,
-    pub qg_role_id: RoleId
+    pub qg_role_id: RoleId,
+    pub participant_role_id: RoleId
 }
 
 pub type Error = Box<dyn std::error::Error + Send + Sync>;
@@ -36,6 +37,8 @@ async fn main() {
     let guild_id = GuildId::new(guild_id_str.parse().expect("Invalid Guild ID"));
     let quest_giver_str = env::var("QUEST_GIVER_ID").expect("missing QUEST_GIVER_ID");
     let quest_giver_id = serenity::RoleId::new(quest_giver_str.parse().expect("Invalid Quest Giver ID"));
+    let quest_participant_str = env::var("QUEST_PARTICIPANT_ID").expect("missing QUEST_PARTICIPANT_ID");
+    let quest_participant_id = serenity::RoleId::new(quest_participant_str.parse().expect("Invalid Quest Participant ID"));
     let brokers = env::var("KAFKA_BROKERS").unwrap_or("kafka:9092".to_string());
 
     let sa_key_path = env::var("GOOGLE_APPLICATION_CREDENTIALS").unwrap_or("/app/credentials.json".to_string());
@@ -86,7 +89,8 @@ async fn main() {
                     target_guild_id: guild_id,
                     sheets_hub: hub,
                     google_sheet_id: sheet_id,
-                    qg_role_id: quest_giver_id
+                    qg_role_id: quest_giver_id,
+                    participant_role_id: quest_participant_id
                 })
             })
         })
