@@ -29,7 +29,7 @@ services:
       start_period: 15s
 
   bot-gateway:
-    build: ./bot-gateway
+    image: ghcr.io/Genshiken/SideQuestGST/gst-quest-bot:latest 
     container_name: gst-bot-gateway
     restart: unless-stopped
     environment:
@@ -47,7 +47,7 @@ services:
         condition: service_healthy
 
   sheet-worker:
-    build: ./sheet-worker
+    image: ghcr.io/Genshiken/SideQuestGST/gst-sheet-worker:latest
     container_name: gst-sheet-worker
     restart: unless-stopped
     environment:
