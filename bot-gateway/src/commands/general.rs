@@ -4,7 +4,7 @@ use serenity::all::{CreateEmbed, CreateEmbedFooter};
 
 type Context<'a> = poise::Context<'a, Data, Error>;
 
-#[poise::command(slash_command, check = "crate::security::check_guild")]
+#[poise::command(slash_command, description_localized("en-US", "Help for all available commands"), check = "crate::security::check_guild")]
 pub async fn help(
     ctx: Context<'_>,
 ) -> Result<(), Error> {

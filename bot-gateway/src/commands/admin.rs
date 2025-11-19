@@ -4,7 +4,7 @@ use crate::kafka::produce_event;
 
 type Context<'a> = poise::Context<'a, Data, Error>;
 
-#[poise::command(slash_command, description_localized("en-US", "**Register** a new community"), check = "crate::security::check_admin")]
+#[poise::command(slash_command, description_localized("en-US", "Register a new community"), check = "crate::security::check_admin")]
 pub async fn register_community(
     ctx: Context<'_>,
     #[description = "Community Name"] name: String,

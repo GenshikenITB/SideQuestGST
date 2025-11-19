@@ -5,7 +5,7 @@ use std::collections::HashMap;
 
 type Context<'a> = poise::Context<'a, Data, Error>;
 
-#[poise::command(slash_command, description_localized("en-US", "View your personal **status**"), check = "crate::security::check_guild")]
+#[poise::command(slash_command, description_localized("en-US", "View your personal status"), check = "crate::security::check_guild")]
 pub async fn stats(ctx: Context<'_>) -> Result<(), Error> {
     ctx.defer_ephemeral().await?;
 
