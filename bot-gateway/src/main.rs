@@ -65,6 +65,7 @@ async fn main() {
             commands: vec![
                 commands::quest::create(), 
                 commands::quest::take(),
+                commands::quest::drop(),
                 commands::quest::submit(),
                 commands::stats::stats(),
                 commands::list::list(),
