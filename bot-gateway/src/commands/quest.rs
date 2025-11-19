@@ -248,20 +248,21 @@ pub async fn edit(
     #[derive(Debug, poise::Modal)]
     #[name = "Edit Quest Details"]
     struct EditModal {
-        #[name = "New Title (leave empty to keep current)"]
+        #[name = "New Title (optional)"]
         title: String,
 
-        #[name = "Description & Platform / Location\nRow 1: Platform (optional)\nRow 2+: Description (optional)"]
+        #[name = "Description & Platform / Location"]
         #[paragraph]
+        #[placeholder = "Row 1: Platform (optional)\nRow 2+: Description (optional)"]
         description_and_platform: String,
 
-        #[name = "Participant Slots (leave empty to keep current)"]
+        #[name = "Participant Slots (optional)"]
         slots: String,
 
-        #[name = "Start Time (YYYY-MM-DD HH:MM) (leave empty to keep current)"]
+        #[name = "Start Time (YYYY-MM-DD HH:MM)"]
         schedule: String,
 
-        #[name = "Deadline (YYYY-MM-DD HH:MM) (leave empty to keep current)"]
+        #[name = "Deadline (YYYY-MM-DD HH:MM) (optional)"]
         deadline: Option<String>,
     }
 
