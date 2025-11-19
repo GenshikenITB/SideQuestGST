@@ -251,18 +251,18 @@ pub async fn edit(
     #[name = "Edit Quest Details"]
     struct EditModal {
         #[name = "New Title (optional)"]
-        title: String,
+        title: Option<String>,
 
-        #[name = "Description & Platform / Location"]
+        #[name = "Platform (first line) / Description (next lines) (optional)"]
         #[paragraph]
-        #[placeholder = "Row 1: Platform (optional)\nRow 2+: Description (optional)"]
-        description_and_platform: String,
+        #[placeholder = "Line 1: Platform (optional)\nLine 2+: Description (optional)"]
+        description_and_platform: Option<String>,
 
         #[name = "Participant Slots (optional)"]
-        slots: String,
+        slots: Option<String>,
 
         #[name = "Start Time (YYYY-MM-DD HH:MM) (optional)"]
-        schedule: String,
+        schedule: Option<String>,
 
         #[name = "Deadline (YYYY-MM-DD HH:MM) (optional)"]
         deadline: Option<String>,
@@ -281,106 +281,118 @@ pub async fn edit(
     let modal_data = EditModal::execute(app_ctx).await?;
 
     if let Some(data) = modal_data {
-        let (description_provided, platform_provided) = {
-            let raw = data.description_and_platform.trim();
-            if raw.is_empty() {
-                (None, None)
-            } else {
-                let parts: Vec<&str> = raw.splitn(2, '\n').collect();
-                let plat = parts.get(0).map(|s| s.trim()).unwrap_or("").to_string();
-                let desc = parts.get(1).map(|s| s.trim()).unwrap_or("").to_string();
-                let plat_opt = if plat.is_empty() { None } else { Some(plat) };
-                let desc_opt = if desc.is_empty() { None } else { Some(desc) };
-                (desc_opt, plat_opt)
-            }
-        };
+        let title_opt = data.title.and_then(|s| {
+            let t = s.trim();
+            if t.is_empty() { None } else { Some(t.to_string()) }
+        });
 
-        let new_title = if data.title.trim().is_empty() {
-            existing_title.clone()
-        } else {
-            data.title.trim().to_string()
-        };
-
-        let new_description = description_provided.unwrap_or_else(|| existing_description.clone());
-        let new_platform = platform_provided.unwrap_or_else(|| existing_platform.clone());
-
-        let new_slots: i8 = if data.slots.trim().is_empty() {
-            existing_slots.parse::<i8>().unwrap_or(0)
-        } else {
-            match data.slots.trim().parse::<i8>() {
-                Ok(s) => s,
-                Err(_) => {
-                    ctx.send(CreateReply::default()
-                        .content("❌ Invalid slots number.")
-                        .ephemeral(true)).await?;
-                    return Ok(());
+        let (description_opt, platform_opt) = match data.description_and_platform {
+            Some(s) => {
+                let raw = s.trim();
+                if raw.is_empty() {
+                    (None, None)
+                } else {
+                    let parts: Vec<&str> = raw.splitn(2, '\n').collect();
+                    let plat = parts.get(0).map(|p| p.trim()).unwrap_or("").to_string();
+                    let desc = parts.get(1).map(|d| d.trim()).unwrap_or("").to_string();
+                    let plat_opt = if plat.is_empty() { None } else { Some(plat) };
+                    let desc_opt = if desc.is_empty() { None } else { Some(desc) };
+                    (desc_opt, plat_opt)
                 }
             }
+            None => (None, None),
         };
 
-        let new_schedule_iso = if data.schedule.trim().is_empty() {
-            if existing_schedule.is_empty() {
-                ctx.send(CreateReply::default()
-                    .content("❌ Existing schedule missing; please provide a start time.")
-                    .ephemeral(true)).await?;
-                return Ok(());
-            } else {
-                existing_schedule.clone()
-            }
-        } else {
-            match parse_wib(&data.schedule) {
-                Ok(iso) => iso,
-                Err(msg) => {
-                    ctx.send(CreateReply::default()
-                        .content(format!("❌ Schedule Error: {}", msg))
-                        .ephemeral(true)).await?;
-                    return Ok(());
-                }
-            }
-        };
-
-        let new_deadline_iso = match data.deadline {
-            Some(d) if !d.trim().is_empty() => {
-                match parse_wib(&d) {
-                    Ok(iso) => iso,
-                    Err(msg) => {
-                        ctx.send(CreateReply::default()
-                            .content(format!("❌ Deadline Error: {}", msg))
-                            .ephemeral(true)).await?;
-                        return Ok(());
+        let slots_opt = match data.slots {
+            Some(s) => {
+                let t = s.trim();
+                if t.is_empty() {
+                    None
+                } else {
+                    match t.parse::<i8>() {
+                        Ok(v) => Some(v),
+                        Err(_) => {
+                            ctx.send(CreateReply::default()
+                                .content("❌ Invalid slots number.")
+                                .ephemeral(true)).await?;
+                            return Ok(());
+                        }
                     }
                 }
             }
-            _ => {
-                if existing_deadline.is_empty() {
-                    new_schedule_iso.clone()
+            None => None,
+        };
+
+        let schedule_opt = match data.schedule {
+            Some(s) => {
+                let t = s.trim();
+                if t.is_empty() {
+                    None
                 } else {
-                    existing_deadline.clone()
+                    match parse_wib(t) {
+                        Ok(iso) => Some(iso),
+                        Err(msg) => {
+                            ctx.send(CreateReply::default()
+                                .content(format!("❌ Schedule Error: {}", msg))
+                                .ephemeral(true)).await?;
+                            return Ok(());
+                        }
+                    }
                 }
             }
+            None => None,
         };
+
+        let deadline_opt = match data.deadline {
+            Some(d) => {
+                let t = d.trim();
+                if t.is_empty() {
+                    None
+                } else {
+                    match parse_wib(t) {
+                        Ok(iso) => Some(iso),
+                        Err(msg) => {
+                            ctx.send(CreateReply::default()
+                                .content(format!("❌ Deadline Error: {}", msg))
+                                .ephemeral(true)).await?;
+                            return Ok(());
+                        }
+                    }
+                }
+            }
+            None => None,
+        };
+
+        let final_title = title_opt.unwrap_or_else(|| existing_title.clone());
+        let final_platform = platform_opt.unwrap_or_else(|| existing_platform.clone());
+        let final_description = description_opt.unwrap_or_else(|| existing_description.clone());
+        let final_slots = slots_opt.unwrap_or_else(|| existing_slots.parse::<i8>().unwrap_or(0));
+        let final_schedule = schedule_opt.unwrap_or_else(|| existing_schedule.clone());
+        let final_deadline = deadline_opt.unwrap_or_else(|| {
+            if existing_deadline.is_empty() { final_schedule.clone() } else { existing_deadline.clone() }
+        });
 
         let edit_payload = EditPayload {
             quest_id: quest_id.clone(),
-            title: new_title.clone(),
-            description: new_description.clone(),
-            slots: new_slots,
-            schedule: new_schedule_iso.clone(),
-            deadline: new_deadline_iso.clone(),
-            platform: new_platform.clone(),
+            title: final_title.clone(),
+            description: final_description.clone(),
+            slots: final_slots,
+            schedule: final_schedule.clone(),
+            deadline: final_deadline.clone(),
+            platform: final_platform.clone(),
         };
 
         produce_event(ctx, "EDIT_QUEST", &edit_payload).await?;
 
-        let display_ts = DateTime::parse_from_rfc3339(&new_schedule_iso)
+        let display_ts = DateTime::parse_from_rfc3339(&final_schedule)
             .map(|dt| dt.timestamp())
             .unwrap_or(0);
 
         ctx.send(CreateReply::default()
             .embed(CreateEmbed::default()
-                .title(format!("✏️ Quest Edited: {}", new_title))
+                .title(format!("✏️ Quest Edited: {}", final_title))
                 .description(&edit_payload.description)
-                .field("👥 Slots", format!("{}", new_slots), true)
+                .field("👥 Slots", format!("{}", final_slots), true)
                 .field("📅 Start Time", format!("<t:{}:f>", display_ts), true)
                 .field("📍 Location", &edit_payload.platform, true)
                 .field("ID", &quest_id, false)

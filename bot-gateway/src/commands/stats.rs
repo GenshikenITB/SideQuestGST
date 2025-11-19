@@ -63,7 +63,7 @@ pub async fn stats(ctx: Context<'_>) -> Result<(), Error> {
                                 completed_count += 1;
                             } else if status.contains("FAILED") {
                                 failed_count += 1;
-                            } else {
+                            } else if status.contains("ON_PROGRESS") {
                                 active_count += 1;
                                 quest_list_str.push_str(&format!(
                                     "**{}**\n└ 🆔 `{}` | 🛡️ {} | 📌 {}\n\n", 
