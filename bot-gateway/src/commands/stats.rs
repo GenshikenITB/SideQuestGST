@@ -46,7 +46,7 @@ pub fn calculate_stats(
                 } else if status.contains("ON_PROGRESS") {
                     active += 1;
                     list_str.push_str(&format!(
-                        "**{}**\n└ 🆔 `{}`\n└ 🛡️ {}\n└ 📌 {}\n\n", 
+                        "**{}**\n├ 🆔 `{}`\n├ 🛡️ {}\n└ 📌 {}\n\n", 
                         title, q_id, organizer, status
                     ));
                 }
