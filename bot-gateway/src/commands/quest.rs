@@ -4,22 +4,13 @@ use crate::models::{QuestPayload, QuestCategory, Division,
                      EditPayload, DeletePayload
                     };
 use crate::kafka::produce_event;
+use common::parse_wib;
 use poise::Modal as _;
 use poise::CreateReply;
 use serenity::all::{CreateEmbed, CreateEmbedFooter, Attachment};
-use chrono::{TimeZone, NaiveDateTime, FixedOffset, DateTime};
+use chrono::DateTime;
 
 type Context<'a> = poise::Context<'a, Data, Error>;
-
-fn parse_wib(input: &str) -> Result<String, String> {
-    let naive = NaiveDateTime::parse_from_str(input, "%Y-%m-%d %H:%M")
-        .map_err(|_| "Wrong time format! Use: YYYY-MM-DD HH:MM (E.g: 2025-11-25 19:30)".to_string())?;
-
-    let wib_offset = FixedOffset::east_opt(7 * 3600).unwrap();
-    let dt_wib = wib_offset.from_local_datetime(&naive).unwrap();
-    
-    Ok(dt_wib.to_rfc3339())
-}
 
 async fn get_quest_and_participant_data(hub: &HubType, sheet_id: &str, quest_id: &str) -> Result<(i8, i8, Option<String>, String), Error> {
     let result = hub.spreadsheets().values_batch_get(sheet_id)

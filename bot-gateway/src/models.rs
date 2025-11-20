@@ -91,14 +91,6 @@ pub struct StatsResult {
     pub list_str: String,
 }
 
-#[derive(Debug, PartialEq)]
-pub enum QuestStatus {
-    Ended,
-    Ongoing,
-    Upcoming,
-    Tba,
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

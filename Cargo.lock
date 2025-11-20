@@ -197,6 +197,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "common"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "unicode-normalization",
+]
+
+[[package]]
 name = "core-foundation"
 version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -660,6 +668,7 @@ name = "gst-quest-bot"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "common",
  "dotenv",
  "futures-util",
  "google-sheets4",
@@ -678,6 +687,7 @@ dependencies = [
 name = "gst-sheet-worker"
 version = "0.1.0"
 dependencies = [
+ "common",
  "dotenv",
  "google-sheets4",
  "rdkafka",

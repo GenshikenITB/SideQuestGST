@@ -1,6 +1,6 @@
 [workspace]
 members = [
-    "bot-gateway",
+    "bot-gateway", "common",
     "sheet-worker"
 ]
 resolver = "2"

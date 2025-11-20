@@ -26,3 +26,5 @@ google-sheets4 = "5.0"
 hyper = { version = "0.14", features = ["full"] }
 hyper-rustls = { version = "0.24", features = ["http1", "http2", "tls12"] }
 futures-util = "0.3.31"
+
+common = { path = "../common" }

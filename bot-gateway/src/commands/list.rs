@@ -1,5 +1,5 @@
 use crate::{Data, Error};
-use crate::models::QuestStatus;
+use common::{calculate_status, QuestStatus};
 use std::collections::HashMap;
 use chrono::{DateTime, Utc};
 use poise::serenity_prelude as serenity;
@@ -11,18 +11,6 @@ use serenity::all::{
 use futures_util::stream::StreamExt;
 
 type Context<'a> = poise::Context<'a, Data, Error>;
-
-fn calculate_status(current_time: i64, start: &i64, end: &i64) -> QuestStatus {
-    if *end > 0 && current_time > *end {
-        QuestStatus::Ended
-    } else if *start > 0 && current_time >= *start {
-        QuestStatus::Ongoing
-    } else if *start > 0 {
-        QuestStatus::Upcoming
-    } else {
-        QuestStatus::Tba
-    }
-}
 
 async fn paginate_embeds(ctx: Context<'_>, embeds: Vec<serenity::CreateEmbed>) -> Result<(), Error> {
     if embeds.is_empty() {

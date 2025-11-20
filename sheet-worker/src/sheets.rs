@@ -1,6 +1,7 @@
 use google_sheets4::{hyper, hyper_rustls, Sheets, chrono};
 use google_sheets4::api::{ValueRange, BatchUpdateSpreadsheetRequest, Request, DeleteDimensionRequest, DimensionRange};
 use serde_json::json;
+use common::normalize_name;
 use crate::models::{EventMessage, QuestPayload, RegistrationPayload, NewCommunityPayload, ProofPayload, EditPayload, DeletePayload};
 
 pub type HubType = Sheets<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>>;
@@ -110,10 +111,10 @@ pub async fn process_event(hub: &HubType, spreadsheet_id: &str, event: EventMess
                     Ok((_, range)) => {
                         let mut duplicate = false;
                         if let Some(rows) = range.values {
-                            let target = data.community_name.trim().to_lowercase();
+                            let target = normalize_name(&data.community_name);
                             for row in rows.iter().skip(1) {
                                 if let Some(cell) = row.get(0).and_then(|v| v.as_str()) {
-                                    if cell.trim().to_lowercase() == target {
+                                    if normalize_name(cell) == target {
                                         duplicate = true;
                                         break;
                                     }

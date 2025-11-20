@@ -1,6 +1,7 @@
 use crate::{Data, Error};
 use crate::models::NewCommunityPayload;
 use crate::kafka::produce_event;
+use common::normalize_name;
 
 type Context<'a> = poise::Context<'a, Data, Error>;
 
@@ -25,10 +26,10 @@ pub async fn register_community(
     match hub.spreadsheets().values_get(sheet_id, "Communities!A:A").doit().await {
         Ok((_, range)) => {
             if let Some(rows) = range.values {
-                let target = name.trim().to_lowercase();
+                let target = normalize_name(&name);
                 for row in rows.iter().skip(1) {
                     if let Some(cell) = row.get(0).and_then(|v| v.as_str()) {
-                        if cell.trim().to_lowercase() == target {
+                        if normalize_name(cell) == target {
                             ctx.say(format!("❌ Community `{}` already registered.", name)).await?;
                             return Ok(());
                         }
