@@ -106,12 +106,41 @@ pub async fn process_event(hub: &HubType, spreadsheet_id: &str, event: EventMess
 
         "REGISTER_COMMUNITY" => {
             if let Ok(data) = serde_json::from_str::<NewCommunityPayload>(&event.payload) {
-                let values = vec![vec![
-                    json!(data.community_name),
-                    json!(data.leader_id),
-                    json!(now),
-                ]];
-                append_to_sheet(hub, spreadsheet_id, "Communities!A1", values).await;
+                match hub.spreadsheets().values_get(spreadsheet_id, "Communities!A:A").doit().await {
+                    Ok((_, range)) => {
+                        let mut duplicate = false;
+                        if let Some(rows) = range.values {
+                            let target = data.community_name.trim().to_lowercase();
+                            for row in rows.iter().skip(1) {
+                                if let Some(cell) = row.get(0).and_then(|v| v.as_str()) {
+                                    if cell.trim().to_lowercase() == target {
+                                        duplicate = true;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                        if duplicate {
+                            println!("Skipping duplicate community registration for '{}'", data.community_name);
+                        } else {
+                            let values = vec![vec![
+                                json!(data.community_name),
+                                json!(data.leader_id),
+                                json!(now),
+                            ]];
+                            append_to_sheet(hub, spreadsheet_id, "Communities!A1", values).await;
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("Failed to check Communities sheet before append: {:?}", e);
+                        let values = vec![vec![
+                            json!(data.community_name),
+                            json!(data.leader_id),
+                            json!(now),
+                        ]];
+                        append_to_sheet(hub, spreadsheet_id, "Communities!A1", values).await;
+                    }
+                }
             }
         },
 

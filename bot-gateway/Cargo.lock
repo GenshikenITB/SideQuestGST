@@ -661,6 +661,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "dotenv",
+ "futures-util",
  "google-sheets4",
  "hyper",
  "hyper-rustls 0.24.2",

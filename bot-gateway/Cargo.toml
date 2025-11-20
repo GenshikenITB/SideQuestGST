@@ -9,7 +9,7 @@ tokio = { version = "1.36", features = ["macros", "rt-multi-thread"] }
 
 # Discord Framework
 poise = "0.6" 
-serenity = "0.12" # Poise 0.6 uses Serenity 0.12
+serenity = { version = "0.12", features = ["client", "gateway", "rustls_backend", "collector" ]} # Poise 0.6 uses Serenity 0.12
 
 # Kafka Client
 # "cmake-build" ensures librdkafka is built from source within the container
@@ -25,3 +25,4 @@ chrono = { version = "0.4", features = ["serde"] }
 google-sheets4 = "5.0"
 hyper = { version = "0.14", features = ["full"] }
 hyper-rustls = { version = "0.24", features = ["http1", "http2", "tls12"] }
+futures-util = "0.3.31"

@@ -1,9 +1,61 @@
 use crate::{Data, Error};
+use crate::models::StatsResult;
 use poise::serenity_prelude as serenity;
 use poise::CreateReply;
 use std::collections::HashMap;
 
 type Context<'a> = poise::Context<'a, Data, Error>;
+
+pub fn calculate_stats(
+    user_id: &str, 
+    q_rows: &[Vec<String>], 
+    p_rows: &[Vec<String>]
+) -> StatsResult {
+    let mut quest_map: HashMap<String, (String, String)> = HashMap::new();
+
+    for row in q_rows {
+        if row.len() >= 5 {
+            let q_id = row[0].clone();
+            let title = row[1].clone();
+            let organizer = row[4].clone();
+            quest_map.insert(q_id, (title, organizer));
+        }
+    }
+
+    let mut active = 0;
+    let mut completed = 0;
+    let mut failed = 0;
+    let mut list_str = String::new();
+
+    for row in p_rows {
+        if row.len() >= 4 {
+            let row_user_id = &row[1];
+
+            if row_user_id == user_id {
+                let q_id = row[0].as_str();
+                let status = row[3].to_uppercase();
+
+                let (title, organizer) = quest_map.get(q_id)
+                    .map(|(t, o)| (t.as_str(), o.as_str()))
+                    .unwrap_or(("Unknown Quest", "-"));
+
+                if status.contains("COMPLETED") || status.contains("VERIFIED") {
+                    completed += 1;
+                } else if status.contains("FAILED") {
+                    failed += 1;
+                } else if status.contains("ON_PROGRESS") {
+                    active += 1;
+                    list_str.push_str(&format!(
+                        "**{}**\n└ 🆔 `{}`\n└ 🛡️ {}\n└ 📌 {}\n\n", 
+                        title, q_id, organizer, status
+                    ));
+                }
+            }
+        }
+    }
+
+    StatsResult { active, completed, failed, list_str }
+}
 
 #[poise::command(slash_command, description_localized("en-US", "View your personal status"), check = "crate::security::check_guild")]
 pub async fn stats(ctx: Context<'_>) -> Result<(), Error> {
@@ -28,68 +80,37 @@ pub async fn stats(ctx: Context<'_>) -> Result<(), Error> {
                 return Ok(());
             }
 
-            let mut quest_map: HashMap<String, (String, String)> = HashMap::new();
-            
-            if let Some(q_rows) = &value_ranges[1].values {
-                for row in q_rows {
-                    if row.len() >= 5 {
-                        let q_id = row[0].as_str().unwrap_or("").to_string();
-                        let title = row[1].as_str().unwrap_or("Unknown Title").to_string();
-                        let organizer = row[4].as_str().unwrap_or("Unknown").to_string();
-                        quest_map.insert(q_id, (title, organizer));
+            let extract_rows = |idx: usize| -> Vec<Vec<String>> {
+                if let Some(v) = value_ranges.get(idx) {
+                    if let Some(rows) = &v.values {
+                        return rows.iter().map(|row| {
+                            row.iter().map(|cell| cell.as_str().unwrap_or("").to_string()).collect()
+                        }).collect();
                     }
                 }
-            }
+                vec![]
+            };
 
-            let mut active_count = 0;
-            let mut completed_count = 0;
-            let mut failed_count = 0;
-            let mut quest_list_str = String::new();
+            let p_rows = extract_rows(0);
+            let q_rows = extract_rows(1);
 
-            if let Some(p_rows) = &value_ranges[0].values {
-                for row in p_rows.iter().skip(1) {
-                    if row.len() >= 4 {
-                        let row_user_id = row[1].as_str().unwrap_or("");
-
-                        if row_user_id == user_id {
-                            let q_id = row[0].as_str().unwrap_or("???");
-                            let status = row[3].as_str().unwrap_or("UNKNOWN").to_uppercase();
-
-                            let (title, organizer) = quest_map.get(q_id)
-                                .map(|(t, o)| (t.as_str(), o.as_str()))
-                                .unwrap_or(("Unknown Quest", "-"));
-
-                            if status.contains("COMPLETED") || status.contains("VERIFIED") {
-                                completed_count += 1;
-                            } else if status.contains("FAILED") {
-                                failed_count += 1;
-                            } else if status.contains("ON_PROGRESS") {
-                                active_count += 1;
-                                quest_list_str.push_str(&format!(
-                                    "**{}**\n└ 🆔 `{}` | 🛡️ {} | 📌 {}\n\n", 
-                                    title, q_id, organizer, status
-                                ));
-                            }
-                        }
-                    }
-                }
-            }
+            let mut stats = calculate_stats(&user_id, &q_rows, &p_rows);
 
             let dm_channel = ctx.author().create_dm_channel(&ctx).await?;
             
             let embed = serenity::CreateEmbed::new()
                 .title(format!("📊 User Stats: {}", ctx.author().name))
-                .field("🔥 Active Quests", format!("{}", active_count), true)
-                .field("✅ Completed", format!("{}", completed_count), true)
-                .field("❌ Failed", format!("{}", failed_count), true)
-                .description(if quest_list_str.is_empty() { 
+                .field("🔥 Active Quests", format!("{}", stats.active), true)
+                .field("✅ Completed", format!("{}", stats.completed), true)
+                .field("❌ Failed", format!("{}", stats.failed), true)
+                .description(if stats.list_str.is_empty() { 
                     "No active quest at the moment.".to_string() 
                 } else { 
-                    if quest_list_str.len() > 2000 {
-                        quest_list_str.truncate(1900);
-                        quest_list_str.push_str("...(etc)");
+                    if stats.list_str.len() > 2000 {
+                        stats.list_str.truncate(1900);
+                        stats.list_str.push_str("...(etc)");
                     }
-                    format!("**Active quests list:**\n{}", quest_list_str) 
+                    format!("**Active quests list:**\n{}", stats.list_str) 
                 })
                 .color(0x3498DB);
 
@@ -107,4 +128,33 @@ pub async fn stats(ctx: Context<'_>) -> Result<(), Error> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_calculate_stats() {
+        let user_id = "user123";
+        
+        let q_rows = vec![
+            vec!["q1".into(), "Quest 1".into(), "Cat".into(), "5".into(), "Div A".into()],
+            vec!["q2".into(), "Quest 2".into(), "Cat".into(), "5".into(), "Div B".into()],
+        ];
+
+        let p_rows = vec![
+            vec!["q1".into(), "user123".into(), "tag".into(), "ON_PROGRESS".into()],
+            vec!["q2".into(), "user123".into(), "tag".into(), "COMPLETED".into()],
+            vec!["q1".into(), "other".into(), "tag".into(), "ON_PROGRESS".into()],
+        ];
+
+        let res = calculate_stats(user_id, &q_rows, &p_rows);
+
+        assert_eq!(res.active, 1);
+        assert_eq!(res.completed, 1);
+        assert_eq!(res.failed, 0);
+        assert!(res.list_str.contains("Quest 1"));
+        assert!(!res.list_str.contains("Quest 2"));
+    }
 }
