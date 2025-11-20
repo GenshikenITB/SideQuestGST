@@ -21,7 +21,7 @@ RUN mkdir sheet-worker/src && echo "fn main() {}" > sheet-worker/src/main.rs
 
 RUN cargo build --release --package gst-quest-bot
 
-RUN rm -rf common/src bot-gateway/src sheet-worker/src
+RUN rm -rf common/src bot-gateway/src
 COPY common/src common/src
 COPY bot-gateway/src bot-gateway/src
 
