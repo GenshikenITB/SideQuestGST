@@ -4,7 +4,7 @@ use crate::models::{QuestPayload, QuestCategory, Division,
                      EditPayload, DeletePayload
                     };
 use crate::kafka::produce_event;
-use common::parse_wib;
+use common::{parse_wib, calculate_status, QuestStatus};
 use poise::Modal as _;
 use poise::CreateReply;
 use serenity::all::{CreateEmbed, CreateEmbedFooter, Attachment};
@@ -12,7 +12,7 @@ use chrono::DateTime;
 
 type Context<'a> = poise::Context<'a, Data, Error>;
 
-async fn get_quest_and_participant_data(hub: &HubType, sheet_id: &str, quest_id: &str) -> Result<(i8, i8, Option<String>, String), Error> {
+async fn get_quest_and_participant_data(hub: &HubType, sheet_id: &str, quest_id: &str) -> Result<(i8, i8, Option<String>, Option<String>, String), Error> {
     let result = hub.spreadsheets().values_batch_get(sheet_id)
         .add_ranges("Quests!A:I")
         .add_ranges("Participants!A:B")
@@ -24,6 +24,7 @@ async fn get_quest_and_participant_data(hub: &HubType, sheet_id: &str, quest_id:
 
     let mut max_slots: i8 = 0;
     let mut schedule_iso: Option<String> = None;
+    let mut deadline_iso: Option<String> = None;
     let mut quest_title = "Unknown Quest".to_string();
     let mut found = false;
 
@@ -33,6 +34,7 @@ async fn get_quest_and_participant_data(hub: &HubType, sheet_id: &str, quest_id:
                 quest_title = row[1].as_str().unwrap_or("Unknown").to_string();
                 max_slots = row[3].as_str().unwrap_or("0").parse::<i8>().unwrap_or(0);
                 schedule_iso = Some(row[5].as_str().unwrap_or("").to_string());
+                deadline_iso = Some(row[8].as_str().unwrap_or("").to_string());
                 found = true;
                 break;
             }
@@ -54,7 +56,7 @@ async fn get_quest_and_participant_data(hub: &HubType, sheet_id: &str, quest_id:
 
     current_participants = current_participants.saturating_sub(1); 
 
-    Ok((max_slots, current_participants, schedule_iso, quest_title))
+    Ok((max_slots, current_participants, schedule_iso, deadline_iso, quest_title))
 }
 
 pub fn determine_organizer(category: QuestCategory, division: Division, community_name: Option<String>) -> Result<String, String> {
@@ -471,12 +473,37 @@ pub async fn take(
 ) -> Result<(), Error> {
     ctx.defer_ephemeral().await?;
 
+    let now = chrono::Utc::now().timestamp();
+    
     let hub = &ctx.data().sheets_hub;
     let sheet_id = &ctx.data().google_sheet_id;
     let user_id = ctx.author().id.to_string();
-    
+
     match get_quest_and_participant_data(hub, sheet_id, &quest_id).await {
-        Ok((max_slots, current_participants, _, quest_title)) => {
+        Ok((max_slots, current_participants, schedule_iso, deadline_iso, quest_title)) => {
+            let schedule_str = schedule_iso.unwrap_or_default();
+            let deadline_str = deadline_iso.unwrap_or_default();
+            
+            let quest_schedule = if !schedule_str.is_empty() {
+                chrono::DateTime::parse_from_rfc3339(&schedule_str).map(|dt| dt.timestamp()).unwrap_or(0)
+            } else { 0 };
+
+            let quest_deadline = if !deadline_str.is_empty() {
+                chrono::DateTime::parse_from_rfc3339(&deadline_str).map(|dt| dt.timestamp()).unwrap_or(0)
+            } else { 0 };
+
+            let status = calculate_status(now, &quest_schedule, &quest_deadline);
+
+            if status == QuestStatus::Ended {
+                ctx.say("❌ This quest has already ended (deadline passed).").await?;
+                return Ok(());
+            }
+
+            if quest_schedule > 0 && now >= quest_schedule {
+                ctx.say("❌ This quest has already started and cannot be taken.").await?;
+                return Ok(());
+            }
+
             let participants_res = hub.spreadsheets().values_get(sheet_id, "Participants!A:B").doit().await;
             if let Ok((_, part_range)) = participants_res {
                 if let Some(rows) = part_range.values {
@@ -521,7 +548,7 @@ pub async fn drop(
     let sheet_id = &ctx.data().google_sheet_id;
     let user_id = ctx.author().id.to_string();
 
-    let (_, _, schedule_opt, quest_title) = match get_quest_and_participant_data(hub, sheet_id, &quest_id).await {
+    let (_, _, schedule_opt, _, quest_title) = match get_quest_and_participant_data(hub, sheet_id, &quest_id).await {
         Ok(data) => data,
         Err(e) => {
             ctx.say(format!("❌ Failed to fetch quest detail: {}", e)).await?;
