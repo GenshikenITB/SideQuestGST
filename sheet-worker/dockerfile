@@ -25,6 +25,7 @@ RUN rm -rf common/src sheet-worker/src
 COPY common/src common/src
 COPY sheet-worker/src sheet-worker/src
 
+RUN touch common/src/lib.rs
 RUN touch sheet-worker/src/main.rs
 RUN cargo build --release --package gst-sheet-worker
 

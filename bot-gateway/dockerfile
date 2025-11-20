@@ -25,6 +25,7 @@ RUN rm -rf common/src bot-gateway/src
 COPY common/src common/src
 COPY bot-gateway/src bot-gateway/src
 
+RUN touch common/src/lib.rs
 RUN touch bot-gateway/src/main.rs
 RUN cargo build --release --package gst-quest-bot
 
