@@ -1,0 +1,6 @@
+[workspace]
+members = [
+    "bot-gateway",
+    "sheet-worker"
+]
+resolver = "2"
