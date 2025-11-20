@@ -57,7 +57,8 @@ jobs:
       - name: Build and Push gst-quest-bot
         uses: docker/build-push-action@v5
         with:
-          context: ./bot-gateway
+          context: .
+          file: ./bot-gateway/dockerfile
           push: true
           tags: ghcr.io/${{ env.GHCR_ACTOR_LOWERCASE }}/${{ env.GHCR_REPO_LOWERCASE }}/gst-quest-bot:latest
           cache-from: type=gha,scope=bot-gateway
@@ -66,7 +67,8 @@ jobs:
       - name: Build and Push gst-sheet-worker
         uses: docker/build-push-action@v5
         with:
-          context: ./sheet-worker
+          context: .
+          file: ./sheet-worker/dockerfile
           push: true
           tags: ghcr.io/${{ env.GHCR_ACTOR_LOWERCASE }}/${{ env.GHCR_REPO_LOWERCASE }}/gst-sheet-worker:latest
           cache-from: type=gha,scope=sheet-worker

@@ -29,7 +29,9 @@ services:
       start_period: 15s
 
   bot-gateway:
-    build: ./bot-gateway
+    build: 
+      context: .
+      dockerfile: bot-gateway/dockerfile
     image: ghcr.io/sustuna/sidequestgst/gst-quest-bot:latest 
     container_name: gst-bot-gateway
     restart: unless-stopped
@@ -49,7 +51,9 @@ services:
         condition: service_healthy
 
   sheet-worker:
-    build: ./sheet-worker
+    build: 
+      context: .
+      dockerfile: sheet-worker/dockerfile
     image: ghcr.io/sustuna/sidequestgst/gst-sheet-worker:latest
     container_name: gst-sheet-worker
     restart: unless-stopped

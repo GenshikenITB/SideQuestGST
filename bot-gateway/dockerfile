@@ -10,16 +10,24 @@ RUN apt-get update && apt-get install -y \
     libsasl2-dev \
     && rm -rf /var/lib/apt/lists/*
 
-
 COPY Cargo.toml Cargo.lock ./
-RUN mkdir src && echo "fn main() {}" > src/main.rs
-RUN cargo build --release
-RUN rm -rf src
-COPY src ./src
-RUN touch src/main.rs && cargo build --release
+COPY common/Cargo.toml common/Cargo.toml
+COPY bot-gateway/Cargo.toml bot-gateway/Cargo.toml
+COPY sheet-worker/Cargo.toml sheet-worker/Cargo.toml
+
+RUN mkdir common/src && echo "pub fn dummy() {}" > common/src/lib.rs
+RUN mkdir bot-gateway/src && echo "fn main() {}" > bot-gateway/src/main.rs
+RUN mkdir sheet-worker/src && echo "fn main() {}" > sheet-worker/src/main.rs
+
+RUN cargo build --release --package gst-quest-bot
+
+RUN rm -rf common/src bot-gateway/src sheet-worker/src
+COPY common/src common/src
+COPY bot-gateway/src bot-gateway/src
+
+RUN touch bot-gateway/src/main.rs
+RUN cargo build --release --package gst-quest-bot
 
 FROM gcr.io/distroless/cc-debian12
-
 COPY --from=builder /app/target/release/gst-quest-bot /usr/local/bin/gst-quest-bot
-
 CMD ["gst-quest-bot"]

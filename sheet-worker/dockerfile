@@ -11,15 +11,23 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 COPY Cargo.toml Cargo.lock ./
-RUN mkdir src && echo "fn main() {}" > src/main.rs
-RUN cargo build --release
-RUN rm -rf src
+COPY common/Cargo.toml common/Cargo.toml
+COPY bot-gateway/Cargo.toml bot-gateway/Cargo.toml
+COPY sheet-worker/Cargo.toml sheet-worker/Cargo.toml
 
-COPY src ./src
-RUN touch src/main.rs && cargo build --release
+RUN mkdir common/src && echo "pub fn dummy() {}" > common/src/lib.rs
+RUN mkdir bot-gateway/src && echo "fn main() {}" > bot-gateway/src/main.rs
+RUN mkdir sheet-worker/src && echo "fn main() {}" > sheet-worker/src/main.rs
+
+RUN cargo build --release --package gst-sheet-worker
+
+RUN rm -rf common/src bot-gateway/src sheet-worker/src
+COPY common/src common/src
+COPY sheet-worker/src sheet-worker/src
+
+RUN touch sheet-worker/src/main.rs
+RUN cargo build --release --package gst-sheet-worker
 
 FROM gcr.io/distroless/cc-debian12
-
 COPY --from=builder /app/target/release/gst-sheet-worker /usr/local/bin/gst-sheet-worker
-
 CMD ["gst-sheet-worker"]
