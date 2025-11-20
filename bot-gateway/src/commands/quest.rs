@@ -240,7 +240,7 @@ pub async fn edit(
             if row.len() >= 1 && row[0].as_str().unwrap_or("") == quest_id {
                 existing_title = row.get(1).and_then(|v| v.as_str()).unwrap_or("").to_string();
                 existing_slots = row.get(3).and_then(|v| v.as_str()).unwrap_or("").to_string();
-                existing_platform = row.get(4).and_then(|v| v.as_str()).unwrap_or("").to_string();
+                existing_platform = row.get(6).and_then(|v| v.as_str()).unwrap_or("").to_string();
                 existing_schedule = row.get(5).and_then(|v| v.as_str()).unwrap_or("").to_string();
                 existing_deadline = row.get(8).and_then(|v| v.as_str()).unwrap_or("").to_string();
                 existing_description = row.get(7).and_then(|v| v.as_str()).unwrap_or("").to_string();

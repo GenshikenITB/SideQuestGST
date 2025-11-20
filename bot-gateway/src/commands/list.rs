@@ -140,7 +140,7 @@ pub async fn list(ctx: Context<'_>) -> Result<(), Error> {
                     let schedule_str = row[5].as_str().unwrap_or("");
                     
                     // ASSUMPTION: Column G (Index 6) is the End Time / Deadline
-                    let deadline_str = row[6].as_str().unwrap_or(""); 
+                    let deadline_str = row[8].as_str().unwrap_or(""); 
                     
                     let max_slots = row[3].as_str().unwrap_or("0").parse::<i8>().unwrap_or(0);
 
