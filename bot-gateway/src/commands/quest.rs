@@ -118,7 +118,7 @@ async fn autocomplete_quest_id<'a>(
                         if row.len() >= 9 {
                             let id = row[0].as_str().unwrap_or("");
                             let title = row[1].as_str().unwrap_or("No Title");
-                            let slots = row[8].as_str().unwrap_or("0").parse::<i32>().unwrap_or(0);
+                            let slots = row[3].as_str().unwrap_or("0").parse::<i32>().unwrap_or(0);
                             let filled = *counts.get(id).unwrap_or(&0);
 
                             if filled < slots {
