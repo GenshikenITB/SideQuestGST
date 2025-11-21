@@ -91,6 +91,11 @@ pub struct StatsResult {
     pub list_str: String,
 }
 
+pub enum QuestCompleteMode {
+    Take,
+    Submit,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -1,10 +1,12 @@
+use std::collections::HashMap;
+
 use crate::{Data, Error, HubType};
-use crate::models::{QuestPayload, QuestCategory, Division,
-                     RegistrationPayload, ProofPayload, 
-                     EditPayload, DeletePayload
+use crate::models::{DeletePayload, Division, EditPayload, ProofPayload, QuestCategory, QuestCompleteMode, QuestPayload, RegistrationPayload
                     };
 use crate::kafka::produce_event;
 use common::{parse_wib, calculate_status, QuestStatus};
+use futures_util::{stream, Stream};
+use futures_util::StreamExt;
 use poise::Modal as _;
 use poise::CreateReply;
 use serenity::all::{CreateEmbed, CreateEmbedFooter, Attachment};
@@ -74,6 +76,95 @@ pub fn determine_organizer(category: QuestCategory, division: Division, communit
                 }
             }
         }
+}
+
+async fn autocomplete_quest_id<'a>(
+    ctx: Context<'_>,
+    partial: &'a str,
+) -> impl Stream<Item = String> + 'a {
+
+    let mode = match ctx.command().name.as_str() {
+        "take" => QuestCompleteMode::Take,
+        _ => QuestCompleteMode::Submit,
+    };
+
+    let hub = &ctx.data().sheets_hub;
+    let sheet_id = &ctx.data().google_sheet_id;
+
+    let res = hub.spreadsheets().values_batch_get(sheet_id)
+        .add_ranges("Quests!A:I")
+        .add_ranges("Participants!A:D")
+        .doit()
+        .await;
+
+    let mut choices = Vec::new();
+
+    if let Ok((_, batch)) = res {
+        if let Some(ranges) = batch.value_ranges {
+            // Safely extract rows, defaulting to empty if missing
+            let q_rows = ranges.get(0).and_then(|r| r.values.as_ref()).cloned().unwrap_or_default();
+            let p_rows = ranges.get(1).and_then(|r| r.values.as_ref()).cloned().unwrap_or_default();
+
+            match mode {
+                QuestCompleteMode::Take => {
+                    let mut counts = HashMap::new();
+                    for row in p_rows.iter().skip(1) {
+                        if let Some(id) = row.get(0) {
+                            *counts.entry(id.as_str().unwrap_or("")).or_insert(0) += 1;
+                        }
+                    }
+
+                    for row in q_rows.iter().skip(1) {
+                        if row.len() >= 9 {
+                            let id = row[0].as_str().unwrap_or("");
+                            let title = row[1].as_str().unwrap_or("No Title");
+                            let slots = row[8].as_str().unwrap_or("0").parse::<i32>().unwrap_or(0);
+                            let filled = *counts.get(id).unwrap_or(&0);
+
+                            if filled < slots {
+                                let display = format!("{} ({} left) - {}", title, slots - filled, id);
+                                if display.to_lowercase().contains(&partial.to_lowercase()) || id.contains(partial) {
+                                    choices.push(id.to_string()); 
+                                }
+                            }
+                        }
+                    }
+                },
+                QuestCompleteMode::Submit => {
+                    // Logic: Iterate Participants (User specific), lookup Quest Titles
+                    let user_id = ctx.author().id.to_string();
+                    
+                    let mut titles = HashMap::new();
+                    for row in q_rows.iter().skip(1) {
+                        if row.len() >= 2 {
+                            titles.insert(
+                                row[0].as_str().unwrap_or(""), 
+                                row[1].as_str().unwrap_or("Unknown")
+                            );
+                        }
+                    }
+
+                    for row in p_rows.iter().skip(1) {
+                        if row.len() >= 4 {
+                            let q_id = row[0].as_str().unwrap_or("");
+                            let u_id = row[1].as_str().unwrap_or("");
+                            let status = row[3].as_str().unwrap_or("");
+
+                            if u_id == user_id && status == "ON_PROGRESS" {
+                                let title = titles.get(q_id).unwrap_or(&"Unknown");
+                                let display = format!("{} - {}", title, q_id);
+                                
+                                if display.to_lowercase().contains(&partial.to_lowercase()) {
+                                    choices.push(q_id.to_string());
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    stream::iter(choices).take(25)
 }
 
 #[poise::command(slash_command, description_localized("en-US", "Create a new quest"), check = "crate::security::check_quest_role")] 
@@ -469,7 +560,9 @@ pub async fn delete(
                  check = "crate::security::check_guild", check = "crate::security::check_participant_role")]
 pub async fn take(
     ctx: Context<'_>,
-    #[description = "Quest ID"] quest_id: String
+    #[description = "Select a Quest"]
+    #[autocomplete = "autocomplete_quest_id"]
+    quest_id: String
 ) -> Result<(), Error> {
     ctx.defer_ephemeral().await?;
 
@@ -540,7 +633,9 @@ pub async fn take(
                  check = "crate::security::check_guild", check = "crate::security::check_participant_role")]
 pub async fn drop(
     ctx: Context<'_>,
-    #[description = "Quest ID to drop"] quest_id: String
+    #[description = "Quest to drop"]
+    #[autocomplete = "autocomplete_quest_id"]
+     quest_id: String
 ) -> Result<(), Error> {
     ctx.defer_ephemeral().await?;
 
