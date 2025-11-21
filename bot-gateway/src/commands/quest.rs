@@ -739,7 +739,9 @@ pub async fn drop(
                  check = "crate::security::check_guild", check = "crate::security::check_participant_role")]
 pub async fn submit(
     ctx: Context<'_>,
-    #[description = "Taken Quest ID"] quest_id: String,
+    #[description = "Taken Quest"]
+    #[autocomplete = "autocomplete_quest_id"]
+    quest_id: String,
     #[description = "Upload Proof"] proof_image: Attachment,
 ) -> Result<(), Error> {
 
