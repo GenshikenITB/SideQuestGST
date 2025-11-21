@@ -34,7 +34,7 @@ pub fn calculate_stats(
 
             if row_user_id == user_id {
                 let q_id = row[0].as_str();
-                let status = row[3].to_uppercase();
+                let mut status = row[3].to_uppercase();
 
                 let (title, organizer) = quest_map.get(q_id)
                     .map(|(t, o)| (t.as_str(), o.as_str()))
@@ -45,9 +45,10 @@ pub fn calculate_stats(
                 } else if status.contains("FAILED") {
                     failed += 1;
                 } else if status.contains("ON_PROGRESS") {
+                    status = "ON PROGRESS".to_string();
                     active += 1;
                     list_str.push_str(&format!(
-                        "**{}**\n├ 🆔 `{}`\n├ 🛡️ {}\n└ 📌 {}\n\n", 
+                        "**{}**\n├ 🆔 ID: `{}`\n├ 🛡️ Organizer: {}\n└ 📌 Status: `{}`\n\n", 
                         title, q_id, organizer, status
                     ));
                 }
