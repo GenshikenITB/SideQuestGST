@@ -83,6 +83,7 @@ async fn autocomplete_quest_id<'a>(
 
     let mode = match ctx.command().name.as_str() {
         "take" => QuestCompleteMode::Take,
+        "view" => QuestCompleteMode::View,
         _ => QuestCompleteMode::Submit,
     };
 
@@ -105,7 +106,7 @@ async fn autocomplete_quest_id<'a>(
                         if row.len() >= 9 {
                             let id = row[0].clone();
                             let title = row.get(1).map(|s| s.as_str()).unwrap_or("No Title").to_string();
-                            let slots = row[3].parse::<i32>().unwrap_or(0);
+                            let slots = row[3].parse::<i8>().unwrap_or(0);
                             let schedule_str = row[5].clone();
                             let deadline_str = row[8].clone(); 
                             let filled = *counts.get(&id).unwrap_or(&0);
@@ -176,7 +177,47 @@ async fn autocomplete_quest_id<'a>(
                             }
                         }
                     }
-                }
+                },
+                QuestCompleteMode::View => {
+                    for row in data.q_rows.iter().skip(1) {
+                        if row.len() >= 9 {
+                            let id = row[0].clone();
+                            let title = row.get(1).map(|s| s.as_str()).unwrap_or("No Title").to_string();
+                            let schedule_str = row[5].clone();
+                            let deadline_str = row[8].clone();
+
+                            let start = if let Ok(dt) = DateTime::parse_from_rfc3339(&schedule_str) {
+                                dt.timestamp()
+                            } else {
+                                0
+                            };
+
+                            // Parse Deadline/End Time
+                            let end = if let Ok(dt) = DateTime::parse_from_rfc3339(&deadline_str) {
+                                dt.timestamp()
+                            } else {
+                                0 // 0 implies no deadline provided
+                            };
+
+                            let status = calculate_status(now, &start, &end);
+
+                            if status != QuestStatus::Ended {
+                                let name = format!("{} - {}", title, id);
+                                let name = if name.len() > 100 {
+                                    name[0..100].to_string()
+                                } else {
+                                    name
+                                };
+
+                                if name.to_lowercase().contains(&partial.to_lowercase()) {
+                                    choices.push(AutocompleteChoice::new(
+                                        name, id.to_string()
+                                    ));
+                                }
+                            }
+                        }
+                    }
+                },
             }
         }
     stream::iter(choices).take(25)
@@ -730,6 +771,81 @@ pub async fn submit(
     produce_event(ctx, "SUBMIT_PROOF", &payload).await?;
 
     ctx.say(format!("✅ Proof for quest `{}` has been successfully submitted.", quest_id)).await?;
+    Ok(())
+}
+
+#[poise::command(slash_command, description_localized("en-US", "View quest details"),
+                check = "crate::security::check_guild")]
+pub async fn view(
+    ctx: Context<'_>,
+    #[description = "Quest"]
+    #[autocomplete = "autocomplete_quest_id"]
+    quest_id: String,
+) -> Result<(), Error> {
+    let res = get_cached_sheet_data(ctx).await;
+    let mut title = String::new();
+    let mut slots = String::new();
+    let mut category = String::new();
+    let mut organizer = String::new();
+    let mut platform = String::new();
+    let mut schedule_iso = String::new();
+    let mut deadline_iso = String::new();
+    let mut description = String::new();
+    let mut found = false;
+
+    match res {
+        Ok(data) => {
+            for row in data.q_rows.iter().skip(1) {
+                if row.len() >= 1 && row[0].clone() == quest_id {
+                    title = row.get(1).map(|v| v.as_str()).unwrap_or("No Title").to_string();
+                    category = row.get(2).map(|v| v.as_str()).unwrap_or("Unknown").to_string();
+                    slots = row[3].parse::<i8>().unwrap_or(0).to_string();
+                    organizer = row.get(4).map(|v| v.as_str()).unwrap_or("Unknown").to_string();
+                    platform = row.get(6).map(|v| v.as_str()).unwrap_or("Unknown").to_string();
+                    schedule_iso = row.get(5).map(|v| v.as_str()).unwrap_or("").to_string();
+                    deadline_iso = row.get(8).map(|v| v.as_str()).unwrap_or("").to_string();
+                    description = row.get(7).map(|v| v.as_str()).unwrap_or("").to_string();
+                    found = true;
+                    break;
+                }
+            }
+        },
+        Err(e) => {
+            eprintln!("Sheet Error: {:?}", e);
+            ctx.say("❌ Internal server error.").await?;
+        }
+    }
+
+    if !found {
+        ctx.say(format!("❌ Quest ID `{}` not found.", quest_id)).await?;
+        return Ok(());
+    }
+
+    let display_ts = DateTime::parse_from_rfc3339(&schedule_iso)
+        .unwrap()
+        .timestamp();
+
+    let display_dl = DateTime::parse_from_rfc3339(&deadline_iso)
+        .unwrap()
+        .timestamp();
+
+    ctx.send(CreateReply::default()
+        .embed(CreateEmbed::default()
+            .title(format!("⚔️ Quest: {}", title))
+                .description(&description)
+                .field("📁 Category", &category, true)
+                .field("🛡️ By", &organizer, true)
+                .field("👥 Slots", &slots, true)
+                .field("📅 Start Time", format!("<t:{}:f>", display_ts), true)
+                .field("⏰ Deadline", format!("<t:{}:f>", display_dl), true)
+                .field("📍 Location", &platform, true)
+                .field("ID", &quest_id, false)
+                .color(0x3498DB)
+                .footer(CreateEmbedFooter::new("Use /take <id> to take this quest"))
+        )
+        .ephemeral(true)
+    ).await?;
+
     Ok(())
 }
 

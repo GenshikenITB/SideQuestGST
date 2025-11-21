@@ -94,6 +94,7 @@ pub struct StatsResult {
 pub enum QuestCompleteMode {
     Take,
     Submit,
+    View,
 }
 
 #[cfg(test)]
