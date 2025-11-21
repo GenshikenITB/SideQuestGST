@@ -13,6 +13,7 @@ mod api;
 use poise::serenity_prelude as serenity;
 use rdkafka::config::ClientConfig;
 use rdkafka::producer::FutureProducer;
+use redis::Client as RedisClient;
 use tokio::spawn;
 use std::{env, net::{SocketAddr}};
 use google_sheets4::{hyper, hyper_rustls, oauth2, Sheets};
@@ -28,7 +29,8 @@ pub struct Data {
     pub sheets_hub: HubType,
     pub google_sheet_id: String,
     pub qg_role_id: RoleId,
-    pub participant_role_id: RoleId
+    pub participant_role_id: RoleId,
+    pub redis_client: RedisClient,
 }
 
 pub type Error = Box<dyn std::error::Error + Send + Sync>;
@@ -46,6 +48,9 @@ async fn main() {
     let quest_participant_str = env::var("QUEST_PARTICIPANT_ID").expect("missing QUEST_PARTICIPANT_ID");
     let quest_participant_id = serenity::RoleId::new(quest_participant_str.parse().expect("Invalid Quest Participant ID"));
     let brokers = env::var("KAFKA_BROKERS").unwrap_or("kafka:9092".to_string());
+
+    let redis_url = env::var("REDIS_URL").expect("missing REDIS_URL");
+    let redis_client = RedisClient::open(redis_url).expect("Invalid Redis URL");
 
     let sa_key_path = env::var("GOOGLE_APPLICATION_CREDENTIALS").unwrap_or("/app/credentials.json".to_string());
     let sheet_id = env::var("GOOGLE_SHEET_ID").expect("Missing GOOGLE_SHEET_ID");
@@ -102,7 +107,8 @@ async fn main() {
                     sheets_hub: hub,
                     google_sheet_id: sheet_id,
                     qg_role_id: quest_giver_id,
-                    participant_role_id: quest_participant_id
+                    participant_role_id: quest_participant_id,
+                    redis_client: redis_client,
                 })
             })
         })

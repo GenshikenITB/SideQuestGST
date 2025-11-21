@@ -96,6 +96,12 @@ pub enum QuestCompleteMode {
     Submit,
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct CachedQuestData {
+    pub q_rows: Vec<Vec<String>>,
+    pub p_rows: Vec<Vec<String>>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
