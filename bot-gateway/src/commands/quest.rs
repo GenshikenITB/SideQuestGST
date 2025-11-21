@@ -9,8 +9,8 @@ use futures_util::{stream, Stream};
 use futures_util::StreamExt;
 use poise::Modal as _;
 use poise::CreateReply;
-use serenity::all::{CreateEmbed, CreateEmbedFooter, Attachment};
-use chrono::DateTime;
+use serenity::all::{Attachment, AutocompleteChoice, CreateEmbed, CreateEmbedFooter};
+use chrono::{DateTime, Utc};
 
 type Context<'a> = poise::Context<'a, Data, Error>;
 
@@ -81,7 +81,9 @@ pub fn determine_organizer(category: QuestCategory, division: Division, communit
 async fn autocomplete_quest_id<'a>(
     ctx: Context<'_>,
     partial: &'a str,
-) -> impl Stream<Item = String> + 'a {
+) -> impl Stream<Item = AutocompleteChoice> + 'a {
+
+    let now = Utc::now().timestamp();
 
     let mode = match ctx.command().name.as_str() {
         "take" => QuestCompleteMode::Take,
@@ -119,12 +121,37 @@ async fn autocomplete_quest_id<'a>(
                             let id = row[0].as_str().unwrap_or("");
                             let title = row[1].as_str().unwrap_or("No Title");
                             let slots = row[3].as_str().unwrap_or("0").parse::<i32>().unwrap_or(0);
+                            let schedule_str = row[5].as_str().unwrap_or("");
+                            let deadline_str = row[8].as_str().unwrap_or(""); 
                             let filled = *counts.get(id).unwrap_or(&0);
 
-                            if filled < slots {
-                                let display = format!("{} ({} left) - {}", title, slots - filled, id);
-                                if display.to_lowercase().contains(&partial.to_lowercase()) || id.contains(partial) {
-                                    choices.push(id.to_string()); 
+                            let start = if let Ok(dt) = DateTime::parse_from_rfc3339(schedule_str) {
+                                dt.timestamp()
+                            } else {
+                                0
+                            };
+
+                            // Parse Deadline/End Time
+                            let end = if let Ok(dt) = DateTime::parse_from_rfc3339(deadline_str) {
+                                dt.timestamp()
+                            } else {
+                                0 // 0 implies no deadline provided
+                            };
+
+                            let status = calculate_status(now, &start, &end);
+
+                            if status == QuestStatus::Upcoming && filled < slots {
+                                let name = format!("{} ({} left) - {}", title, slots - filled, id);
+                                let name = if name.len() > 100 {
+                                    name[0..100].to_string()
+                                } else {
+                                    name
+                                };
+
+                                if name.to_lowercase().contains(&partial.to_lowercase()) {
+                                    choices.push(AutocompleteChoice::new(
+                                        name, id.to_string()
+                                    ));
                                 }
                             }
                         }
@@ -152,10 +179,14 @@ async fn autocomplete_quest_id<'a>(
 
                             if u_id == user_id && status == "ON_PROGRESS" {
                                 let title = titles.get(q_id).unwrap_or(&"Unknown");
-                                let display = format!("{} - {}", title, q_id);
                                 
-                                if display.to_lowercase().contains(&partial.to_lowercase()) {
-                                    choices.push(q_id.to_string());
+                                // What the user SEES
+                                let name = format!("{} - {}", title, q_id);
+                                
+                                if name.to_lowercase().contains(&partial.to_lowercase()) {
+                                    choices.push(AutocompleteChoice::new(
+                                        name, q_id.to_string()
+                                    ));
                                 }
                             }
                         }
