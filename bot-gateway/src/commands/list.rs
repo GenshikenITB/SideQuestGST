@@ -86,119 +86,128 @@ pub async fn list(ctx: Context<'_>) -> Result<(), Error> {
 
     let now = Utc::now().timestamp();
 
-    let data = get_cached_sheet_data(ctx).await.unwrap();
+    let result = get_cached_sheet_data(ctx).await;
 
-    let mut participant_counts: HashMap<String, i8> = HashMap::new();
-    
-    for row in data.p_rows.iter().skip(1) {
-        if row.len() >= 4 {
-            let q_id = row[0].clone();
-            let status = row[3].clone().to_uppercase();
+    match result {
+        Ok(data) => {
+
+            let mut participant_counts: HashMap<String, i8> = HashMap::new();
             
-            if !q_id.is_empty() && (status == "ON_PROGRESS" || status == "COMPLETED" || status == "VERIFIED") {
-                *participant_counts.entry(q_id.to_string()).or_insert(0) += 1;
+            for row in data.p_rows.iter().skip(1) {
+                if row.len() >= 4 {
+                    let q_id = row[0].clone();
+                    let status = row[3].clone().to_uppercase();
+                    
+                    if !q_id.is_empty() && (status == "ON_PROGRESS" || status == "COMPLETED" || status == "VERIFIED") {
+                        *participant_counts.entry(q_id.to_string()).or_insert(0) += 1;
+                    }
+                }
             }
+
+            let mut display_quests: Vec<(String, String, String, i64, i64, i8, i8)> = Vec::new();
+
+            for row in data.q_rows.iter().skip(1) {
+                if row.len() >= 9 {
+                    let q_id = row[0].clone();
+                    let title = row.get(1).map(|s| s.as_str()).unwrap_or("No Title").to_string();
+                    let organizer = row.get(4).map(|s| s.as_str()).unwrap_or("-").to_string();
+                    let schedule_str = row[5].clone();
+                
+                    let deadline_str = row[8].clone(); 
+                    
+                    let max_slots = row[3].parse::<i8>().unwrap_or(0);
+
+                    if q_id == "Quest ID" || q_id.is_empty() { continue; }
+
+                    let current_filled = *participant_counts.get(&q_id).unwrap_or(&0);
+
+                    // Parse Start Time
+                    let schedule_ts = if let Ok(dt) = DateTime::parse_from_rfc3339(&schedule_str) {
+                        dt.timestamp()
+                    } else {
+                        0
+                    };
+
+                    // Parse Deadline/End Time
+                    let deadline_ts = if let Ok(dt) = DateTime::parse_from_rfc3339(&deadline_str) {
+                        dt.timestamp()
+                    } else {
+                        0 // 0 implies no deadline provided
+                    };
+
+                    display_quests.push((q_id, title, organizer, schedule_ts, deadline_ts, max_slots, current_filled));
+                }
+            }
+
+            if display_quests.is_empty() {
+                ctx.say("📭 There're no active quest at the moment.").await?;
+                return Ok(());
+            }
+            
+            let items_per_page = 5;
+            let chunks: Vec<_> = display_quests.chunks(items_per_page).collect();
+
+            let mut embeds: Vec<serenity::CreateEmbed> = Vec::new();
+
+            for (i, chunk) in chunks.iter().enumerate() {
+                let mut embed = serenity::CreateEmbed::new()
+                    .title(format!("📜 Quest Board — Page {} of {}", i + 1, chunks.len()))
+                    .color(0x3498DB);
+
+                for (q_id, title, organizer, schedule_ts, deadline_ts, max_slots, filled) in *chunk {
+                    
+                    let status = calculate_status(now, schedule_ts, deadline_ts);
+                    
+                    let title_display = if status == QuestStatus::Ended {format!("~~{}~~ (Ended)", title)} else {title.clone()};
+
+                    let (status_icon, time_msg, is_active) = match status {
+                        QuestStatus::Ended => (
+                            "🏁", 
+                            format!("Ended <t:{}:R>", deadline_ts), 
+                            false
+                        ),
+                        QuestStatus::Ongoing => (
+                            "🏃", 
+                            format!("**HAPPENING NOW!**\nEnds <t:{}:R>", deadline_ts), 
+                            true
+                        ),
+                        QuestStatus::Upcoming => (
+                            "🟢", 
+                            format!("<t:{}:f> (<t:{}:R>)", schedule_ts, schedule_ts), 
+                            true
+                        ),
+                        QuestStatus::Tba => ("⚪", "Date TBA".to_string(), true),
+                    };
+                    // --- SLOT LOGIC ---
+                    // Only show slot status if the quest hasn't ended
+                    let slot_str = if !is_active {
+                        "❌ **Closed**".to_string()
+                    } else if *filled >= *max_slots {
+                        format!("🔴 **FULL** ({}/{})", filled, max_slots)
+                    } else {
+                        format!("{} **Open** ({}/{})", status_icon, filled, max_slots)
+                    };
+
+                    // Construct Field
+                    let field_name = format!("{} — {}", title_display, q_id);
+                    let field_value = format!(
+                        "• Status: {}\n• By: {}\n• Time: {}\n", 
+                        slot_str, organizer, time_msg
+                    );
+
+                    embed = embed.field(field_name, field_value, false);
+                }
+
+                embeds.push(embed);
+            }
+
+            paginate_embeds(ctx, embeds).await?;
+        },
+        Err(e) => {
+            eprintln!("Sheet Error: {:?}", e);
+            ctx.say("❌ Internal server error.").await?;
         }
     }
-
-    let mut display_quests: Vec<(String, String, String, i64, i64, i8, i8)> = Vec::new();
-
-    for row in data.q_rows.iter().skip(1) {
-        if row.len() >= 9 {
-            let q_id = row[0].clone();
-            let title = row.get(1).map(|s| s.as_str()).unwrap_or("No Title").to_string();
-            let organizer = row.get(4).map(|s| s.as_str()).unwrap_or("-").to_string();
-            let schedule_str = row[5].clone();
-        
-            let deadline_str = row[8].clone(); 
-            
-            let max_slots = row[3].parse::<i8>().unwrap_or(0);
-
-            if q_id == "Quest ID" || q_id.is_empty() { continue; }
-
-            let current_filled = *participant_counts.get(&q_id).unwrap_or(&0);
-
-            // Parse Start Time
-            let schedule_ts = if let Ok(dt) = DateTime::parse_from_rfc3339(&schedule_str) {
-                dt.timestamp()
-            } else {
-                0
-            };
-
-            // Parse Deadline/End Time
-            let deadline_ts = if let Ok(dt) = DateTime::parse_from_rfc3339(&deadline_str) {
-                dt.timestamp()
-            } else {
-                0 // 0 implies no deadline provided
-            };
-
-            display_quests.push((q_id, title, organizer, schedule_ts, deadline_ts, max_slots, current_filled));
-        }
-    }
-
-    if display_quests.is_empty() {
-        ctx.say("📭 There're no active quest at the moment.").await?;
-        return Ok(());
-    }
-    
-    let items_per_page = 5;
-    let chunks: Vec<_> = display_quests.chunks(items_per_page).collect();
-
-    let mut embeds: Vec<serenity::CreateEmbed> = Vec::new();
-
-    for (i, chunk) in chunks.iter().enumerate() {
-        let mut embed = serenity::CreateEmbed::new()
-            .title(format!("📜 Quest Board — Page {} of {}", i + 1, chunks.len()))
-            .color(0x3498DB);
-
-        for (q_id, title, organizer, schedule_ts, deadline_ts, max_slots, filled) in *chunk {
-            
-            let status = calculate_status(now, schedule_ts, deadline_ts);
-            
-            let title_display = if status == QuestStatus::Ended {format!("~~{}~~ (Ended)", title)} else {title.clone()};
-
-            let (status_icon, time_msg, is_active) = match status {
-                QuestStatus::Ended => (
-                    "🏁", 
-                    format!("Ended <t:{}:R>", deadline_ts), 
-                    false
-                ),
-                QuestStatus::Ongoing => (
-                    "🏃", 
-                    format!("**HAPPENING NOW!**\nEnds <t:{}:R>", deadline_ts), 
-                    true
-                ),
-                QuestStatus::Upcoming => (
-                    "🟢", 
-                    format!("<t:{}:f> (<t:{}:R>)", schedule_ts, schedule_ts), 
-                    true
-                ),
-                QuestStatus::Tba => ("⚪", "Date TBA".to_string(), true),
-            };
-            // --- SLOT LOGIC ---
-            // Only show slot status if the quest hasn't ended
-            let slot_str = if !is_active {
-                "❌ **Closed**".to_string()
-            } else if *filled >= *max_slots {
-                format!("🔴 **FULL** ({}/{})", filled, max_slots)
-            } else {
-                format!("{} **Open** ({}/{})", status_icon, filled, max_slots)
-            };
-
-            // Construct Field
-            let field_name = format!("{} — {}", title_display, q_id);
-            let field_value = format!(
-                "• Status: {}\n• By: {}\n• Time: {}\n", 
-                slot_str, organizer, time_msg
-            );
-
-            embed = embed.field(field_name, field_value, false);
-        }
-
-        embeds.push(embed);
-    }
-
-    paginate_embeds(ctx, embeds).await?;
 
     Ok(())
 }

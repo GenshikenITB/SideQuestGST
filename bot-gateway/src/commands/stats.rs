@@ -64,34 +64,42 @@ pub async fn stats(ctx: Context<'_>) -> Result<(), Error> {
 
     let user_id = ctx.author().id.to_string();
 
-    let data = get_cached_sheet_data(ctx).await.unwrap();
+    let result = get_cached_sheet_data(ctx).await;
 
-    let mut stats = calculate_stats(&user_id, &data.q_rows, &data.p_rows);
+    match result {
+        Ok(data) => {
+            let mut stats = calculate_stats(&user_id, &data.q_rows, &data.p_rows);
 
-    let dm_channel = ctx.author().create_dm_channel(&ctx).await?;
-    
-    let embed = serenity::CreateEmbed::new()
-        .title(format!("📊 User Stats: {}", ctx.author().name))
-        .field("🔥 Active Quests", format!("{}", stats.active), true)
-        .field("✅ Completed", format!("{}", stats.completed), true)
-        .field("❌ Failed", format!("{}", stats.failed), true)
-        .description(if stats.list_str.is_empty() { 
-            "No active quest at the moment.".to_string() 
-        } else { 
-            if stats.list_str.len() > 2000 {
-                stats.list_str.truncate(1900);
-                stats.list_str.push_str("...(etc)");
-            }
-            format!("**Active quests list:**\n{}", stats.list_str) 
-        })
-        .color(0x3498DB);
+            let dm_channel = ctx.author().create_dm_channel(&ctx).await?;
+            
+            let embed = serenity::CreateEmbed::new()
+                .title(format!("📊 User Stats: {}", ctx.author().name))
+                .field("🔥 Active Quests", format!("{}", stats.active), true)
+                .field("✅ Completed", format!("{}", stats.completed), true)
+                .field("❌ Failed", format!("{}", stats.failed), true)
+                .description(if stats.list_str.is_empty() { 
+                    "No active quest at the moment.".to_string() 
+                } else { 
+                    if stats.list_str.len() > 2000 {
+                        stats.list_str.truncate(1900);
+                        stats.list_str.push_str("...(etc)");
+                    }
+                    format!("**Active quests list:**\n{}", stats.list_str) 
+                })
+                .color(0x3498DB);
 
-    dm_channel.send_message(&ctx, serenity::CreateMessage::new().embed(embed)).await?;
+            dm_channel.send_message(&ctx, serenity::CreateMessage::new().embed(embed)).await?;
 
-    ctx.send(CreateReply::default()
-        .content("✅ Stats has been send to your DM.")
-        .ephemeral(true)
-    ).await?;
+            ctx.send(CreateReply::default()
+                .content("✅ Stats has been send to your DM.")
+                .ephemeral(true)
+            ).await?;
+        },
+        Err(e) => {
+            eprintln!("Error reading sheets: {:?}", e);
+            ctx.say("❌ Failed fetching stats please contact admins.").await?;
+        }
+    }
 
     Ok(())
 }

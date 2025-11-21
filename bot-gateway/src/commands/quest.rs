@@ -16,36 +16,43 @@ use chrono::{DateTime, Utc};
 type Context<'a> = poise::Context<'a, Data, Error>;
 
 async fn get_quest_and_participant_data(ctx: Context<'_>, quest_id: &str) -> Result<(i8, i8, Option<String>, Option<String>, String), Error> {
-    let data = get_cached_sheet_data(ctx).await?;
+    let res = get_cached_sheet_data(ctx).await;
 
     let mut max_slots: i8 = 0;
     let mut schedule_iso: Option<String> = None;
     let mut deadline_iso: Option<String> = None;
     let mut quest_title = "Unknown Quest".to_string();
     let mut found = false;
-
-    
-    for row in data.q_rows.iter().skip(1) {
-        if row.len() >= 9 && row[0] == quest_id {
-            quest_title = row.get(1).map(|s| s.as_str()).unwrap_or("Unknown").to_string();
-            max_slots = row[3].parse::<i8>().unwrap_or(0);
-            schedule_iso = Some(row[5].clone());
-            deadline_iso = Some(row[8].clone());
-            found = true;
-            break;
-        }
-    }
-
-    if !found {
-        return Err(format!("Quest ID `{}` not found or slots not defined.", quest_id).into());
-    }
-
     let mut current_participants: i8 = 0;
-    for row in data.p_rows.iter().skip(1) {
-        if row.len() >= 2 && row[0] == quest_id {
-            current_participants += 1;
+
+    match res {
+        Ok(data) => {
+            for row in data.q_rows.iter().skip(1) {
+                if row.len() >= 9 && row[0].clone() == quest_id {
+                    quest_title = row.get(1).map(|s| s.as_str()).unwrap_or("Unknown").to_string();
+                    max_slots = row[3].parse::<i8>().unwrap_or(0);
+                    schedule_iso = Some(row[5].clone());
+                    deadline_iso = Some(row[8].clone());
+                    found = true;
+                    break;
+                }
+            }
+
+            if !found {
+                return Err(format!("Quest ID `{}` not found or slots not defined.", quest_id).into());
+            }
+
+            for row in data.p_rows.iter().skip(1) {
+                if row.len() >= 2 && row[0].clone() == quest_id {
+                    current_participants += 1;
+                }
+            } 
+        },
+        Err(e) => {
+            eprintln!("Sheet Error: {:?}", e);
+            ctx.say("❌ Internal server error.").await?;
         }
-    } 
+    }
 
     Ok((max_slots, current_participants, schedule_iso, deadline_iso, quest_title))
 }
@@ -79,96 +86,99 @@ async fn autocomplete_quest_id<'a>(
         _ => QuestCompleteMode::Submit,
     };
 
-    let data = get_cached_sheet_data(ctx).await.unwrap();
+    let res = get_cached_sheet_data(ctx).await;
 
     let mut choices = Vec::new();
 
-    match mode {
-        QuestCompleteMode::Take => {
-            let mut counts = HashMap::new();
-            for row in data.p_rows.iter().skip(1) {
-                if let Some(id) = row.get(0) {
-                    *counts.entry(id).or_insert(0) += 1;
-                }
-            }
+    if let Ok(data) = res {
 
-            for row in data.q_rows.iter().skip(1) {
-                if row.len() >= 9 {
-                    let id = row[0].clone();
-                    let title = row.get(1).map(|s| s.as_str()).unwrap_or("No Title").to_string();
-                    let slots = row[3].parse::<i32>().unwrap_or(0);
-                    let schedule_str = row[5].clone();
-                    let deadline_str = row[8].clone(); 
-                    let filled = *counts.get(&id).unwrap_or(&0);
-
-                    let start = if let Ok(dt) = DateTime::parse_from_rfc3339(&schedule_str) {
-                        dt.timestamp()
-                    } else {
-                        0
-                    };
-
-                    // Parse Deadline/End Time
-                    let end = if let Ok(dt) = DateTime::parse_from_rfc3339(&deadline_str) {
-                        dt.timestamp()
-                    } else {
-                        0 // 0 implies no deadline provided
-                    };
-
-                    let status = calculate_status(now, &start, &end);
-
-                    if status == QuestStatus::Upcoming && filled < slots {
-                        let name = format!("{} ({} left) - {}", title, slots - filled, id);
-                        let name = if name.len() > 100 {
-                            name[0..100].to_string()
-                        } else {
-                            name
-                        };
-
-                        if name.to_lowercase().contains(&partial.to_lowercase()) {
-                            choices.push(AutocompleteChoice::new(
-                                name, id.to_string()
-                            ));
+            match mode {
+                QuestCompleteMode::Take => {
+                    let mut counts = HashMap::new();
+                    for row in data.p_rows.iter().skip(1) {
+                        if let Some(id) = row.get(0) {
+                            *counts.entry(id.clone()).or_insert(0) += 1;
                         }
                     }
-                }
-            }
-        },
-        QuestCompleteMode::Submit => {
-            // Logic: Iterate Participants (User specific), lookup Quest Titles
-            let user_id = ctx.author().id.to_string();
-            
-            let mut titles = HashMap::new();
-            for row in data.q_rows.iter().skip(1) {
-                if row.len() >= 2 {
-                    titles.insert(
-                        row[0].clone(), 
-                        row.get(1).map(|s| s.as_str()).unwrap_or("Unknown").to_string()
-                    );
-                }
-            }
 
-            for row in data.p_rows.iter().skip(1) {
-                if row.len() >= 4 {
-                    let q_id = row[0].clone();
-                    let u_id = row[1].clone();
-                    let status = row[3].clone();
+                    for row in data.q_rows.iter().skip(1) {
+                        if row.len() >= 9 {
+                            let id = row[0].clone();
+                            let title = row.get(1).map(|s| s.as_str()).unwrap_or("No Title").to_string();
+                            let slots = row[3].parse::<i32>().unwrap_or(0);
+                            let schedule_str = row[5].clone();
+                            let deadline_str = row[8].clone(); 
+                            let filled = *counts.get(&id).unwrap_or(&0);
 
-                    if u_id == user_id && status == "ON_PROGRESS" {
-                        let title = titles.get(&q_id).map(|s| s.as_str()).unwrap_or("Unknown").to_string();
-                        
-                        // What the user SEES
-                        let name = format!("{} - {}", title, q_id);
-                        
-                        if name.to_lowercase().contains(&partial.to_lowercase()) {
-                            choices.push(AutocompleteChoice::new(
-                                name, q_id.to_string()
-                            ));
+                            let start = if let Ok(dt) = DateTime::parse_from_rfc3339(&schedule_str) {
+                                dt.timestamp()
+                            } else {
+                                0
+                            };
+
+                            // Parse Deadline/End Time
+                            let end = if let Ok(dt) = DateTime::parse_from_rfc3339(&deadline_str) {
+                                dt.timestamp()
+                            } else {
+                                0 // 0 implies no deadline provided
+                            };
+
+                            let status = calculate_status(now, &start, &end);
+
+                            if status == QuestStatus::Upcoming && filled < slots {
+                                let name = format!("{} ({} left) - {}", title, slots - filled, id);
+                                let name = if name.len() > 100 {
+                                    name[0..100].to_string()
+                                } else {
+                                    name
+                                };
+
+                                if name.to_lowercase().contains(&partial.to_lowercase()) {
+                                    choices.push(AutocompleteChoice::new(
+                                        name, id.to_string()
+                                    ));
+                                }
+                            }
+                        }
+                    }
+                },
+                QuestCompleteMode::Submit => {
+                    // Logic: Iterate Participants (User specific), lookup Quest Titles
+                    let user_id = ctx.author().id.to_string();
+                    
+                    let mut titles = HashMap::new();
+                    for row in data.q_rows.iter().skip(1) {
+                        if row.len() >= 2 {
+                            titles.insert(
+                                row[0].clone(), 
+                                row.get(1).map(|s| s.as_str()).unwrap_or("Unknown").to_string()
+                            );
+                        }
+                    }
+
+                    for row in data.p_rows.iter().skip(1) {
+                        if row.len() >= 4 {
+                            let q_id = row[0].clone();
+                            let u_id = row[1].clone();
+                            let status = row[3].clone();
+
+                            if u_id == user_id && status == "ON_PROGRESS" {
+                                let title = titles.get(&q_id).map(|s| s.as_str()).unwrap_or("Unknown").to_string();
+                                
+                                // What the user SEES
+                                let name = format!("{} - {}", title, q_id);
+                                
+                                if name.to_lowercase().contains(&partial.to_lowercase()) {
+                                    choices.push(AutocompleteChoice::new(
+                                        name, q_id.to_string()
+                                    ));
+                                }
+                            }
                         }
                     }
                 }
             }
         }
-    }
     stream::iter(choices).take(25)
 }
 
@@ -311,7 +321,8 @@ pub async fn edit(
     #[description = "Quest ID to edit"]
     quest_id: String,
 ) -> Result<(), Error> {
-    let data = get_cached_sheet_data(ctx).await.unwrap();
+    // Fetch existing quest data
+    let res = get_cached_sheet_data(ctx).await;
     let mut existing_title = String::new();
     let mut existing_slots = String::new();
     let mut existing_platform = String::new();
@@ -320,19 +331,27 @@ pub async fn edit(
     let mut existing_description = String::new();
     let mut found = false;
 
-    for row in data.q_rows.iter().skip(1) {
-        if row.len() >= 1 && row[0].clone() == quest_id {
-            existing_title = row.get(1).map(|v| v.as_str()).unwrap_or("").to_string();
-            existing_slots = row.get(3).map(|v| v.as_str()).unwrap_or("").to_string();
-            existing_platform = row.get(6).map(|v| v.as_str()).unwrap_or("").to_string();
-            existing_schedule = row.get(5).map(|v| v.as_str()).unwrap_or("").to_string();
-            existing_deadline = row.get(8).map(|v| v.as_str()).unwrap_or("").to_string();
-            existing_description = row.get(7).map(|v| v.as_str()).unwrap_or("").to_string();
-            found = true;
-            break;
+    match res {
+        Ok(data) => {
+            for row in data.q_rows.iter().skip(1) {
+                if row.len() >= 1 && row[0].clone() == quest_id {
+                    existing_title = row.get(1).map(|v| v.as_str()).unwrap_or("").to_string();
+                    existing_slots = row.get(3).map(|v| v.as_str()).unwrap_or("").to_string();
+                    existing_platform = row.get(6).map(|v| v.as_str()).unwrap_or("").to_string();
+                    existing_schedule = row.get(5).map(|v| v.as_str()).unwrap_or("").to_string();
+                    existing_deadline = row.get(8).map(|v| v.as_str()).unwrap_or("").to_string();
+                    existing_description = row.get(7).map(|v| v.as_str()).unwrap_or("").to_string();
+                    found = true;
+                    break;
+                }
+            }
+        },
+        Err(e) => {
+            eprintln!("Sheet Error: {:?}", e);
+            ctx.say("❌ Internal server error.").await?;
         }
     }
-
+ 
     if !found {
         ctx.send(CreateReply::default()
                 .content(format!("❌ Quest ID `{}` not found.", quest_id))
@@ -507,22 +526,28 @@ pub async fn delete(
     #[description = "Quest ID to delete"] quest_id: String,
 ) -> Result<(), Error> {
     ctx.defer_ephemeral().await?;
-    
-    let data = get_cached_sheet_data(ctx).await.unwrap();
+    let lookup = get_cached_sheet_data(ctx).await;
 
-    let mut found = false;
-        for row in data.q_rows.iter().skip(1) {
-            if row.len() >= 1 && row[0].clone() == quest_id {
-                found = true;
-                break;
+    match lookup {
+        Ok(data) => {
+            let mut found = false;
+                for row in data.q_rows.iter().skip(1) {
+                    if row.len() >= 1 && row[0].clone() == quest_id {
+                        found = true;
+                        break;
+                    }
+                }
+
+            if !found {
+                ctx.say(format!("❌ Quest ID `{}` not found.", quest_id)).await?;
+                return Ok(());
             }
         }
-
-    if !found {
-        ctx.say(format!("❌ Quest ID `{}` not found.", quest_id)).await?;
-        return Ok(());
+        Err(e) => {
+            ctx.say(format!("❌ Failed to query sheet: {}", e)).await?;
+            return Ok(());
+        }
     }
-    
 
     let payload = DeletePayload {
         quest_id: quest_id.clone(),
@@ -548,9 +573,7 @@ pub async fn take(
     ctx.defer_ephemeral().await?;
 
     let now = chrono::Utc::now().timestamp();
-    
-    let hub = &ctx.data().sheets_hub;
-    let sheet_id = &ctx.data().google_sheet_id;
+
     let user_id = ctx.author().id.to_string();
 
     match get_quest_and_participant_data(ctx, &quest_id).await {
@@ -578,14 +601,12 @@ pub async fn take(
                 return Ok(());
             }
 
-            let participants_res = hub.spreadsheets().values_get(sheet_id, "Participants!A:B").doit().await;
-            if let Ok((_, part_range)) = participants_res {
-                if let Some(rows) = part_range.values {
-                    for row in rows {
-                        if row.len() >= 2 && row[0].as_str().unwrap_or("") == quest_id && row[1].as_str().unwrap_or("") == user_id {
-                            ctx.say("❌ You've taken this quest.").await?;
-                            return Ok(());
-                        }
+            let participants_res = get_cached_sheet_data(ctx).await;
+            if let Ok(data) = participants_res {
+                for row in data.p_rows {
+                    if row.len() >= 2 && row[0].clone() == quest_id && row[1].clone() == user_id {
+                        ctx.say("❌ You've taken this quest.").await?;
+                        return Ok(());
                     }
                 }
             }
@@ -619,9 +640,6 @@ pub async fn drop(
      quest_id: String
 ) -> Result<(), Error> {
     ctx.defer_ephemeral().await?;
-
-    let hub = &ctx.data().sheets_hub;
-    let sheet_id = &ctx.data().google_sheet_id;
     let user_id = ctx.author().id.to_string();
 
     let (_, _, schedule_opt, _, quest_title) = match get_quest_and_participant_data(ctx, &quest_id).await {
@@ -642,16 +660,15 @@ pub async fn drop(
         return Ok(());
     }
 
-    let participants_res = hub.spreadsheets().values_get(sheet_id, "Participants!A:D").doit().await;
+    let participants_res = get_cached_sheet_data(ctx).await;
     let mut found_on_progress = false;
 
-    if let Ok((_, part_range)) = participants_res {
-        if let Some(rows) = part_range.values {
-            for row in rows.iter().skip(1) {
+    if let Ok(data) = participants_res {
+            for row in data.p_rows.iter().skip(1) {
                 if row.len() >= 4 {
-                    let q_id = row[0].as_str().unwrap_or("");
-                    let u_id = row[1].as_str().unwrap_or("");
-                    let status = row[3].as_str().unwrap_or("");
+                    let q_id = row[0].clone();
+                    let u_id = row[1].clone();
+                    let status = row[3].clone();
 
                     if q_id == quest_id && u_id == user_id {
                         if status == "ON_PROGRESS" {
@@ -664,7 +681,6 @@ pub async fn drop(
                     }
                 }
             }
-        }
     }
 
     if !found_on_progress {
