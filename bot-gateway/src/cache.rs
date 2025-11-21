@@ -30,8 +30,8 @@ pub async fn get_cached_sheet_data(ctx: Context<'_>) -> Result<CachedQuestData, 
 
     let result = hub.spreadsheets().values_batch_get(sheet_id)
         .add_ranges("Quests!A:I")
-        .add_ranges("Participants!A:B")
-        .add_ranges("Communities!A:C")
+        .add_ranges("Participants!A:D")
+        .add_ranges("Communities!A:B")
         .doit()
         .await?;
 

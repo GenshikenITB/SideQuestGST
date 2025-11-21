@@ -663,7 +663,7 @@ pub async fn take(
                 user_tag: ctx.author().tag(),
             };
             produce_event(ctx, "TAKE_QUEST", &payload).await?;
-            ctx.say(format!("✅ Successfully taken the quest `{}`. Available slots: {} of {}.", quest_title, current_participants + 1, max_slots)).await?;
+            ctx.say(format!("✅ Successfully taken the quest `{}`. Remaining slots: {} of {}.", quest_title, current_participants + 1, max_slots)).await?;
         },
         Err(e) => {
             ctx.say(format!("❌ Failed to take quest: {}", e)).await?;

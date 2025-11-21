@@ -217,7 +217,7 @@ async fn update_participant_status(hub: &HubType, spreadsheet_id: &str, quest_id
 
 pub async fn check_deadlines_job(hub: &HubType, spreadsheet_id: &str) {
     println!("Running Deadline Check...");
-    let quests_res = hub.spreadsheets().values_get(spreadsheet_id, "Quests!A:H").doit().await;
+    let quests_res = hub.spreadsheets().values_get(spreadsheet_id, "Quests!A:I").doit().await;
 
     let parts_res = hub.spreadsheets().values_get(spreadsheet_id, "Participants!A:D").doit().await;
 
@@ -232,7 +232,7 @@ pub async fn check_deadlines_job(hub: &HubType, spreadsheet_id: &str) {
         for row in q_rows {
             if row.len() >= 8 {
                 let q_id = row[0].as_str().unwrap_or("").to_string();
-                let deadline_str = row[7].as_str().unwrap_or("");
+                let deadline_str = row[8].as_str().unwrap_or("");
                 
                 if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(deadline_str) {
                     quest_deadlines.insert(q_id, dt);
