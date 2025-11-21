@@ -8,10 +8,14 @@ use rdkafka::message::Message;
 use std::env;
 use crate::models::EventMessage;
 use std::time::Duration;
+use redis::{Client as RedisClient, AsyncCommands};
 
 #[tokio::main]
 async fn main() {
     dotenv::dotenv().ok();
+
+    let redis_url = env::var("REDIS_URL").expect("missing REDIS_URL");
+    let redis_client = RedisClient::open(redis_url).expect("Invalid Redis URL");
 
     let sa_key_path = env::var("GOOGLE_APPLICATION_CREDENTIALS").unwrap_or("/app/credentials.json".to_string());
     let sheet_id = env::var("GOOGLE_SHEET_ID").expect("Missing GOOGLE_SHEET_ID");
@@ -67,7 +71,11 @@ async fn main() {
                 if let Some(payload_result) = m.payload_view::<str>() {
                     if let Ok(text) = payload_result {
                         if let Ok(event) = serde_json::from_str::<EventMessage>(text) {
-                             sheets::process_event(&hub, &sheet_id, event).await;
+                            sheets::process_event(&hub, &sheet_id, event).await;
+
+                            let mut con = redis_client.get_multiplexed_async_connection().await.unwrap();
+                            let _: () = con.del("sheet_data_cache").await.unwrap_or_else(|e| eprintln!("Redis error: {}", e));
+                            println!("Cache invalidated");
                         } else {
                             eprintln!("Malformed JSON received");
                         }

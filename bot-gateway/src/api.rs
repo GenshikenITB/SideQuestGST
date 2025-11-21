@@ -11,10 +11,12 @@ use std::net::SocketAddr;
 use std::time::Duration;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use redis::{Client as RedisClient, AsyncCommands};
 
 #[derive(Clone)]
 pub struct ApiState {
     pub producer: FutureProducer,
+    pub redis_client: RedisClient,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -45,11 +47,25 @@ async fn submit_handler(
     }
 }
 
-pub async fn start_server(producer: FutureProducer, addr: SocketAddr) {
-    let shared_state = Arc::new(ApiState { producer });
+async fn invalidate_cache_handler(
+    State(state): State<Arc<ApiState>>,
+) -> Result<String, StatusCode> {
+    let mut con = state.redis_client.get_multiplexed_async_connection().await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let _: () = con.del("sheet_data_cache").await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    println!("Cache invalidated via Webhook!");
+    Ok("Cache cleared".to_string())
+}
+
+pub async fn start_server(producer: FutureProducer, addr: SocketAddr, redis_client: RedisClient) {
+    let shared_state = Arc::new(ApiState { producer, redis_client });
 
     let app = Router::new()
         .route("/api/submit", post(submit_handler))
+        .route("/api/invalidate_cache", post(invalidate_cache_handler))
         .with_state(shared_state);
 
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();

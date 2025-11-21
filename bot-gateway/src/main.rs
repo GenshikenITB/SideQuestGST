@@ -76,10 +76,11 @@ async fn main() {
         .create()
         .expect("Producer creation error");
 
-    let producer_clone = producer.clone(); 
+    let producer_clone = producer.clone();
+    let redis_client_clone = redis_client.clone();
 
     spawn(async move {
-        start_server(producer_clone, addr).await;
+        start_server(producer_clone, addr, redis_client_clone).await;
     });
 
     let framework = poise::Framework::builder()
