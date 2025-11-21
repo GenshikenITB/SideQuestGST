@@ -92,6 +92,7 @@ async fn main() {
                 commands::quest::take(),
                 commands::quest::drop(),
                 commands::quest::submit(),
+                commands::quest::view(),
                 commands::stats::stats(),
                 commands::list::list(),
                 commands::admin::register_community(),
