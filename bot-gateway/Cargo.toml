@@ -28,3 +28,4 @@ hyper-rustls = { version = "0.24", features = ["http1", "http2", "tls12"] }
 futures-util = "0.3.31"
 
 common = { path = "../common" }
+axum = "0.8.7"

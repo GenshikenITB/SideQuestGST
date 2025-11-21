@@ -24,6 +24,9 @@ jobs:
           echo "GOOGLE_SHEET_ID=mock_sheet_id" >> .env
           echo "QUEST_GIVER_ID=22222" >> .env
           echo "QUEST_PARTICIPANT_ID=66666" >> .env
+          echo "KAFKA_EXTERNAL_PORT=9999" >> .env
+          echo "API_PORT=8080" >> .env
+          echo "API_ADDRESS=0.0.0.0:8080" >> .env
       
       - name: Set Lowercase Tag Variables
         id: set_lowercase_vars

@@ -8,13 +8,17 @@ mod commands {
     pub mod general;
 }
 mod security;
+mod api;
 
 use poise::serenity_prelude as serenity;
 use rdkafka::config::ClientConfig;
 use rdkafka::producer::FutureProducer;
-use std::env;
+use tokio::spawn;
+use std::{env, net::{SocketAddr}};
 use google_sheets4::{hyper, hyper_rustls, oauth2, Sheets};
 use serenity::{GuildId, RoleId};
+
+use crate::api::start_server;
 
 pub type HubType = Sheets<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>>;
 
@@ -32,6 +36,8 @@ pub type Error = Box<dyn std::error::Error + Send + Sync>;
 #[tokio::main]
 async fn main() {
     dotenv::dotenv().ok();
+    let addr_str = env::var("API_ADDRESS").expect("missing API ADDRESS");
+    let addr: SocketAddr = addr_str.parse().expect("API_ADDRESS invalid (use host:port)");
     let token = env::var("DISCORD_TOKEN").expect("missing DISCORD_TOKEN");
     let guild_id_str = env::var("TARGET_GUILD_ID").expect("missing TARGET_GUILD_ID");
     let guild_id = GuildId::new(guild_id_str.parse().expect("Invalid Guild ID"));
@@ -63,6 +69,12 @@ async fn main() {
         .set("message.timeout.ms", "5000")
         .create()
         .expect("Producer creation error");
+
+    let producer_clone = producer.clone(); 
+
+    spawn(async move {
+        start_server(producer_clone, addr).await;
+    });
 
     let framework = poise::Framework::builder()
         .options(poise::FrameworkOptions {

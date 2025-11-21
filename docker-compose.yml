@@ -4,13 +4,13 @@ services:
     container_name: gst-kafka
     restart: unless-stopped
     ports:
-      - "59092:9092"
+      - "${KAFKA_EXTERNAL_PORT}:9092"
     environment:
       - KAFKA_NODE_ID=1
       - KAFKA_PROCESS_ROLES=controller,broker
       - KAFKA_CONTROLLER_QUORUM_VOTERS=1@kafka:9094
       - KAFKA_LISTENERS=INTERNAL://:9093,EXTERNAL://:9092,CONTROLLER://:9094
-      - KAFKA_ADVERTISED_LISTENERS=INTERNAL://kafka:9093,EXTERNAL://localhost:59092
+      - KAFKA_ADVERTISED_LISTENERS=INTERNAL://kafka:9093,EXTERNAL://localhost:${KAFKA_EXTERNAL_PORT}
       - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
       - KAFKA_INTER_BROKER_LISTENER_NAME=INTERNAL
       - KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER
@@ -35,6 +35,8 @@ services:
     image: ghcr.io/sustuna/sidequestgst/gst-quest-bot:latest 
     container_name: gst-bot-gateway
     restart: unless-stopped
+    ports:
+      - "${API_PORT}:8080"
     environment:
       - DISCORD_TOKEN=${DISCORD_TOKEN}
       - KAFKA_BROKERS=kafka:9093
@@ -44,6 +46,7 @@ services:
       - GOOGLE_SHEET_ID=${GOOGLE_SHEET_ID}
       - GOOGLE_APPLICATION_CREDENTIALS=/app/credentials.json
       - RUST_LOG=info
+      - API_ADDRESS=${API_ADDRESS}
     volumes:
       - ./credentials.json:/app/credentials.json:ro 
     depends_on:
