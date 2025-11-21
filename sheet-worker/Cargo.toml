@@ -18,3 +18,4 @@ serde_json = "1.0"
 dotenv = "0.15"
 
 common = { path = "../common" }
+redis = "0.32.7"

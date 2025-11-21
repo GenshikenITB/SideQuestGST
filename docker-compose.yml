@@ -28,6 +28,15 @@ services:
       retries: 10
       start_period: 15s
 
+  redis:
+    image: redis:7-alpine
+    container_name: gst-redis
+    restart: unless-stopped
+    ports:
+      - "${REDIS_EXTERNAL_PORT}:6379"
+    volumes:
+      - redis_data:/data
+
   bot-gateway:
     build: 
       context: .
@@ -47,11 +56,14 @@ services:
       - GOOGLE_APPLICATION_CREDENTIALS=/app/credentials.json
       - RUST_LOG=info
       - API_ADDRESS=${API_ADDRESS}
+      - REDIS_URL=redis://redis:6379
     volumes:
       - ./credentials.json:/app/credentials.json:ro 
     depends_on:
       kafka:
         condition: service_healthy
+      redis:
+        condition: service_started
 
   sheet-worker:
     build: 
@@ -65,11 +77,15 @@ services:
       - GOOGLE_SHEET_ID=${GOOGLE_SHEET_ID}
       - GOOGLE_APPLICATION_CREDENTIALS=/app/credentials.json
       - RUST_LOG=info
+      - REDIS_URL=redis://redis:6379
     volumes:
       - ./credentials.json:/app/credentials.json:ro
     depends_on:
       kafka:
         condition: service_healthy
+      redis:
+        condition: service_started
 
 volumes:
   kafka_data:
+  redis_data:
