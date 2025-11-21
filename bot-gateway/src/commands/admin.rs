@@ -1,3 +1,4 @@
+use crate::cache::get_cached_sheet_data;
 use crate::{Data, Error};
 use crate::models::NewCommunityPayload;
 use crate::kafka::produce_event;
@@ -20,23 +21,20 @@ pub async fn register_community(
 ) -> Result<(), Error> {
     
     let leader_id = determine_leader_id(leader.as_ref());
-
-    let hub = &ctx.data().sheets_hub;
-    let sheet_id = &ctx.data().google_sheet_id;
-    match hub.spreadsheets().values_get(sheet_id, "Communities!A:A").doit().await {
-        Ok((_, range)) => {
-            if let Some(rows) = range.values {
+    let data = get_cached_sheet_data(ctx).await;
+    
+    match data {
+        Ok(res) => {
                 let target = normalize_name(&name);
-                for row in rows.iter().skip(1) {
-                    if let Some(cell) = row.get(0).and_then(|v| v.as_str()) {
+                for row in res.c_rows.iter().skip(1) {
+                    if let Some(cell) = row.get(0).map(|v| v.as_str()) {
                         if normalize_name(cell) == target {
                             ctx.say(format!("❌ Community `{}` already registered.", name)).await?;
                             return Ok(());
                         }
                     }
                 }
-            }
-        }
+            },
         Err(e) => {
             ctx.say(format!("❌ Failed to check existing communities: {}", e)).await?;
             return Ok(());

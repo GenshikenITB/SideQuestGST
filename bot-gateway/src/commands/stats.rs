@@ -1,3 +1,4 @@
+use crate::cache::get_cached_sheet_data;
 use crate::{Data, Error};
 use crate::models::StatsResult;
 use poise::serenity_prelude as serenity;
@@ -62,70 +63,35 @@ pub async fn stats(ctx: Context<'_>) -> Result<(), Error> {
     ctx.defer_ephemeral().await?;
 
     let user_id = ctx.author().id.to_string();
-    let hub = &ctx.data().sheets_hub;
-    let sheet_id = &ctx.data().google_sheet_id;
 
-    let result = hub.spreadsheets().values_batch_get(sheet_id)
-        .add_ranges("Participants!A:D")
-        .add_ranges("Quests!A:E")
-        .doit()
-        .await;
+    let data = get_cached_sheet_data(ctx).await.unwrap();
 
-    match result {
-        Ok((_, batch_response)) => {
-            let value_ranges = batch_response.value_ranges.unwrap_or_default();
-            
-            if value_ranges.len() < 2 {
-                ctx.say("❌ Failed to read sheets data.").await?;
-                return Ok(());
+    let mut stats = calculate_stats(&user_id, &data.q_rows, &data.p_rows);
+
+    let dm_channel = ctx.author().create_dm_channel(&ctx).await?;
+    
+    let embed = serenity::CreateEmbed::new()
+        .title(format!("📊 User Stats: {}", ctx.author().name))
+        .field("🔥 Active Quests", format!("{}", stats.active), true)
+        .field("✅ Completed", format!("{}", stats.completed), true)
+        .field("❌ Failed", format!("{}", stats.failed), true)
+        .description(if stats.list_str.is_empty() { 
+            "No active quest at the moment.".to_string() 
+        } else { 
+            if stats.list_str.len() > 2000 {
+                stats.list_str.truncate(1900);
+                stats.list_str.push_str("...(etc)");
             }
+            format!("**Active quests list:**\n{}", stats.list_str) 
+        })
+        .color(0x3498DB);
 
-            let extract_rows = |idx: usize| -> Vec<Vec<String>> {
-                if let Some(v) = value_ranges.get(idx) {
-                    if let Some(rows) = &v.values {
-                        return rows.iter().map(|row| {
-                            row.iter().map(|cell| cell.as_str().unwrap_or("").to_string()).collect()
-                        }).collect();
-                    }
-                }
-                vec![]
-            };
+    dm_channel.send_message(&ctx, serenity::CreateMessage::new().embed(embed)).await?;
 
-            let p_rows = extract_rows(0);
-            let q_rows = extract_rows(1);
-
-            let mut stats = calculate_stats(&user_id, &q_rows, &p_rows);
-
-            let dm_channel = ctx.author().create_dm_channel(&ctx).await?;
-            
-            let embed = serenity::CreateEmbed::new()
-                .title(format!("📊 User Stats: {}", ctx.author().name))
-                .field("🔥 Active Quests", format!("{}", stats.active), true)
-                .field("✅ Completed", format!("{}", stats.completed), true)
-                .field("❌ Failed", format!("{}", stats.failed), true)
-                .description(if stats.list_str.is_empty() { 
-                    "No active quest at the moment.".to_string() 
-                } else { 
-                    if stats.list_str.len() > 2000 {
-                        stats.list_str.truncate(1900);
-                        stats.list_str.push_str("...(etc)");
-                    }
-                    format!("**Active quests list:**\n{}", stats.list_str) 
-                })
-                .color(0x3498DB);
-
-            dm_channel.send_message(&ctx, serenity::CreateMessage::new().embed(embed)).await?;
-
-            ctx.send(CreateReply::default()
-                .content("✅ Stats has been send to your DM.")
-                .ephemeral(true)
-            ).await?;
-        },
-        Err(e) => {
-            eprintln!("Error reading sheets: {:?}", e);
-            ctx.say("❌ Failed fetching stats please contact admins.").await?;
-        }
-    }
+    ctx.send(CreateReply::default()
+        .content("✅ Stats has been send to your DM.")
+        .ephemeral(true)
+    ).await?;
 
     Ok(())
 }

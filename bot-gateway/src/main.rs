@@ -9,6 +9,7 @@ mod commands {
 }
 mod security;
 mod api;
+mod cache;
 
 use poise::serenity_prelude as serenity;
 use rdkafka::config::ClientConfig;
