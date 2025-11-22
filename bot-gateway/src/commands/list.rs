@@ -17,7 +17,7 @@ async fn paginate_embeds(ctx: Context<'_>, embeds: Vec<serenity::CreateEmbed>) -
     if embeds.is_empty() {
         return Ok(());
     }
-
+    
     let buttons = vec![
         CreateButton::new("prev")
             .label("◀ Prev")
@@ -28,11 +28,19 @@ async fn paginate_embeds(ctx: Context<'_>, embeds: Vec<serenity::CreateEmbed>) -
     ];
     let action_row = CreateActionRow::Buttons(buttons);
 
-    let reply = poise::CreateReply::default()
-        .embed(embeds[0].clone())
-        .components(vec![action_row.clone()]);
+    let mut reply = poise::CreateReply::default()
+        .embed(embeds[0].clone());
+
+    if embeds.len() > 1 {
+        reply = reply.components(vec![action_row.clone()]);
+    }
 
     let handle = ctx.send(reply).await?;
+
+    if embeds.len() <= 1 {
+        return Ok(());
+    }
+    
     let message = handle.message().await?;
 
     let author_id = ctx.author().id;
