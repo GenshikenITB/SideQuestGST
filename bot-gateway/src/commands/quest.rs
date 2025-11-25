@@ -98,7 +98,10 @@ async fn autocomplete_quest_id<'a>(
                     let mut counts = HashMap::new();
                     for row in data.p_rows.iter().skip(1) {
                         if let Some(id) = row.get(0) {
-                            *counts.entry(id.clone()).or_insert(0) += 1;
+                            let status = row.get(3).map(|s| s.as_str()).unwrap_or("");
+                                if status != "DROPPED" {
+                                    *counts.entry(id.clone()).or_insert(0) += 1;
+                                }
                         }
                     }
 
@@ -109,12 +112,6 @@ async fn autocomplete_quest_id<'a>(
                             let slots = row[3].parse::<i8>().unwrap_or(0);
                             let schedule_str = row[5].clone();
                             let deadline_str = row[8].clone(); 
-                            if let Some(id) = row.get(0) {
-                                let status = row.get(3).map(|s| s.as_str()).unwrap_or("");
-                                if status != "DROPPED" {
-                                    *counts.entry(id.clone()).or_insert(0) += 1;
-                                }
-                            }
                             let filled = *counts.get(&id).unwrap_or(&0);
 
                             let start = if let Ok(dt) = DateTime::parse_from_rfc3339(&schedule_str) {
