@@ -105,6 +105,12 @@ pub async fn process_event(hub: &HubType, spreadsheet_id: &str, event: EventMess
             }
         },
 
+        "RETAKE_QUEST" => {
+            if let Ok(data) = serde_json::from_str::<RegistrationPayload>(&event.payload) {
+                update_participant_status(hub, spreadsheet_id, &data.quest_id, &data.user_id, "ON_PROGRESS").await;
+            }
+        },
+
         "REGISTER_COMMUNITY" => {
             if let Ok(data) = serde_json::from_str::<NewCommunityPayload>(&event.payload) {
                 match hub.spreadsheets().values_get(spreadsheet_id, "Communities!A:A").doit().await {

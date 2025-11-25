@@ -641,13 +641,19 @@ pub async fn take(
                 ctx.say("❌ This quest has already started and cannot be taken.").await?;
                 return Ok(());
             }
-
+            
+            let mut retake = false;
             let participants_res = get_cached_sheet_data(ctx).await;
             if let Ok(data) = participants_res {
                 for row in data.p_rows {
                     if row.len() >= 2 && row[0].clone() == quest_id && row[1].clone() == user_id {
-                        ctx.say("❌ You've taken this quest.").await?;
-                        return Ok(());
+                        let status = row.get(3).map(|s| s.as_str()).unwrap_or("");
+                        if status != "DROPPED" {
+                            ctx.say("❌ You've taken this quest.").await?;
+                            return Ok(());
+                        }
+                        // no need for else statement since status is DROPPED
+                        retake = true;
                     }
                 }
             }
@@ -662,7 +668,12 @@ pub async fn take(
                 user_id: user_id.clone(),
                 user_tag: ctx.author().tag(),
             };
-            produce_event(ctx, "TAKE_QUEST", &payload).await?;
+
+            if retake {
+                produce_event(ctx, "RETAKE_QUEST", &payload).await?;
+            } else {
+                produce_event(ctx, "TAKE_QUEST", &payload).await?;
+            }
             ctx.say(format!("✅ Successfully taken the quest `{}`. Remaining slots: {} of {}.", quest_title, current_participants + 1, max_slots)).await?;
         },
         Err(e) => {
