@@ -336,7 +336,10 @@ pub async fn create(
             .unwrap()
             .timestamp();
 
+        let participant_role_id = ctx.data().participant_role_id;
+
         ctx.send(CreateReply::default()
+            .content(format!("<@&{}> A new quest is available!", participant_role_id))
             .embed(CreateEmbed::default()
                 .title(format!("⚔️ New Quest: {}", payload.title))
                  .description(&payload.description)
@@ -347,6 +350,7 @@ pub async fn create(
                  .field("⏰ Deadline", format!("<t:{}:f>", display_dl), true)
                  .field("📍 Location", &payload.platform, true)
                  .field("ID", &quest_id, false)
+
                  .color(0xF1C40F)
                  .footer(CreateEmbedFooter::new("Use /take <id> to take the quest"))
             )
@@ -546,7 +550,10 @@ pub async fn edit(
             .map(|dt| dt.timestamp())
             .unwrap_or(0);
 
+        let participant_role_id = ctx.data().participant_role_id;
+
         ctx.send(CreateReply::default()
+            .content(format!("<@&{}> A quest is edited!", participant_role_id))
             .embed(CreateEmbed::default()
                 .title(format!("✏️ Quest Edited: {}", final_title))
                 .description(&edit_payload.description)
@@ -571,12 +578,13 @@ pub async fn delete(
 ) -> Result<(), Error> {
     ctx.defer_ephemeral().await?;
     let lookup = get_cached_sheet_data(ctx).await;
-
+    let mut quest_name = String::new();
     match lookup {
         Ok(data) => {
             let mut found = false;
                 for row in data.q_rows.iter().skip(1) {
                     if row.len() >= 1 && row[0].clone() == quest_id {
+                        quest_name = row[1].clone();
                         found = true;
                         break;
                     }
@@ -602,7 +610,17 @@ pub async fn delete(
         return Ok(());
     }
 
-    ctx.say(format!("✅ Delete request for quest `{}` sent.", quest_id)).await?;
+    let participant_role_id = ctx.data().participant_role_id;
+
+    ctx.send(CreateReply::default()
+        .content(format!("✅ Delete request for quest `{}` with id `{}` sent.", quest_name, quest_id))
+        .ephemeral(true)
+    ).await?;
+
+    ctx.send(CreateReply::default()
+        .content(format!("<@&{}> a quest `{}` with id `{}` has been deleted!", quest_name, quest_id, participant_role_id))
+        .ephemeral(true)
+    ).await?;
     Ok(())
 }
 
@@ -674,10 +692,11 @@ pub async fn take(
 
             if retake {
                 produce_event(ctx, "RETAKE_QUEST", &payload).await?;
+                ctx.say(format!("✅ Successfully taken the quest `{}`. Remaining slots: {} of {}.", quest_title, max_slots - current_participants, max_slots)).await?;
             } else {
                 produce_event(ctx, "TAKE_QUEST", &payload).await?;
+                ctx.say(format!("✅ Successfully taken the quest `{}`. Remaining slots: {} of {}.", quest_title, max_slots - (current_participants + 1), max_slots)).await?;
             }
-            ctx.say(format!("✅ Successfully taken the quest `{}`. Remaining slots: {} of {}.", quest_title, max_slots - current_participants, max_slots)).await?;
         },
         Err(e) => {
             ctx.say(format!("❌ Failed to take quest: {}", e)).await?;

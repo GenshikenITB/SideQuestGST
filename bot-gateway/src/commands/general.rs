@@ -25,7 +25,7 @@ pub async fn help(
             )
             .field(
                 "📊 Information & Utilities (Guild Members)",
-                "`/list` - Show the **quest board** in a paginated view.\n`/stats` - Get a DM with your **personal quest statistics** and active quests.\n`/view - **View** quest details`\n`/help` - Display this **help page**.",
+                "`/list` - Show the **quest board** in a paginated view.\n`/stats` - Get a DM with your **personal quest statistics** and active quests.\n`/view` - **View** quest details\n`/help` - Display this **help page**.",
                 false,
             )
             .field(
