@@ -129,7 +129,7 @@ async fn autocomplete_quest_id<'a>(
 
                             let status = calculate_status(now, &start, &end);
 
-                            if status == QuestStatus::Upcoming && filled < slots {
+                            if (status == QuestStatus::Upcoming || status == QuestStatus::Ongoing) && filled < slots {
                                 let name = format!("{} ({} left) - {}", title, slots - filled, id);
                                 let name = if name.len() > 100 {
                                     name[0..100].to_string()
@@ -655,11 +655,6 @@ pub async fn take(
 
             if status == QuestStatus::Ended {
                 ctx.say("❌ This quest has already ended (deadline passed).").await?;
-                return Ok(());
-            }
-
-            if quest_schedule > 0 && now >= quest_schedule {
-                ctx.say("❌ This quest has already started and cannot be taken.").await?;
                 return Ok(());
             }
             
