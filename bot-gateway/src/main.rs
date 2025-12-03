@@ -6,6 +6,7 @@ mod commands {
     pub mod stats;
     pub mod list;
     pub mod general;
+    pub mod config;
 }
 mod security;
 mod api;
@@ -97,6 +98,7 @@ async fn main() {
                 commands::list::list(),
                 commands::admin::register_community(),
                 commands::general::help(),
+                commands::config::config(),
             ],
             ..Default::default()
         })

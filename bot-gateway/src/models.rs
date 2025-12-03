@@ -91,6 +91,11 @@ pub struct StatsResult {
     pub list_str: String,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+pub struct GuildConfig {
+    pub announcement_channel_id: Option<u64>,
+    pub ping_role_id: Option<u64>,
+}
 pub enum QuestCompleteMode {
     Take,
     Submit,

@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use redis::AsyncCommands;
 use serde_json::from_str;
-use crate::{Data, Error};
+use crate::{Data, Error, models::GuildConfig};
 
 type Context<'a> = poise::Context<'a, Data, Error>;
 
@@ -58,4 +58,27 @@ pub async fn get_cached_sheet_data(ctx: Context<'_>) -> Result<CachedQuestData, 
     let _: () = con.set_ex(cache_key, json_str, 60).await?;
 
     Ok(data)
+}
+
+pub async fn get_guild_config(ctx: Context<'_>, guild_id: u64) -> Result<GuildConfig, Error> {
+    let redis_client = &ctx.data().redis_client;
+    let mut con = redis_client.get_multiplexed_async_connection().await?;
+    let cache_key = format!("guild_config:{}", guild_id);
+    let cached: Option<String> = con.get(&cache_key).await.ok();
+
+    if let Some(json) = cached {
+        if let Ok(config) = serde_json::from_str::<GuildConfig>(&json) {
+            return Ok(config);
+        }
+    }
+    Ok(GuildConfig::default())
+}
+
+pub async fn set_guild_config(ctx: Context<'_>, guild_id: u64, config: &GuildConfig) -> Result<(), Error> {
+    let redis_client = &ctx.data().redis_client;
+    let mut con = redis_client.get_multiplexed_async_connection().await?;
+    let cache_key = format!("guild_config:{}", guild_id);
+    let json = serde_json::to_string(config)?;
+    let _: () = con.set(&cache_key, json).await?;
+    Ok(())
 }
