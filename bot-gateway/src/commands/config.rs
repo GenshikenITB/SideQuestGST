@@ -45,7 +45,7 @@ pub async fn set_role(
     set_guild_config(ctx, guild_id.get(), &config).await?;
 
     ctx.send(CreateReply::default()
-        .content(format!("✅ Ping role set to <#{}>", role.id))
+        .content(format!("✅ Ping role set to <@&{}>", role.id))
         .ephemeral(true)
     ).await?;
     Ok(())
