@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::cache::get_cached_sheet_data;
+use crate::cache::{get_cached_sheet_data, get_guild_config};
 use crate::{Data, Error};
 use crate::models::{DeletePayload, Division, EditPayload, ProofPayload, QuestCategory, QuestCompleteMode, QuestPayload, RegistrationPayload
                     };
@@ -10,7 +10,7 @@ use futures_util::{stream, Stream};
 use futures_util::StreamExt;
 use poise::Modal as _;
 use poise::CreateReply;
-use serenity::all::{Attachment, AutocompleteChoice, CreateEmbed, CreateEmbedFooter};
+use serenity::all::{Attachment, AutocompleteChoice, ChannelId, CreateEmbed, CreateEmbedFooter, CreateMessage, RoleId};
 use chrono::{DateTime, Utc};
 
 type Context<'a> = poise::Context<'a, Data, Error>;
@@ -248,6 +248,9 @@ pub async fn create(
         }
     };
 
+    let guild_id = ctx.guild_id().ok_or("Must be in guild")?;
+    let config = get_guild_config(ctx, guild_id.get()).await.unwrap_or_default();
+
     #[derive(Debug, poise::Modal)]
     #[name = "Side Quest Details"]
     struct QuestModal {
@@ -328,6 +331,10 @@ pub async fn create(
             deadline: deadline_iso.clone(),
             creator_id: ctx.author().id.to_string(),
         };
+
+
+        produce_event(ctx, "CREATE_QUEST", &payload).await?;
+
         let display_ts = DateTime::parse_from_rfc3339(&schedule_iso)
             .unwrap()
             .timestamp();
@@ -336,27 +343,42 @@ pub async fn create(
             .unwrap()
             .timestamp();
 
-        let participant_role_id = ctx.data().participant_role_id;
+        let ping_role = config.ping_role_id
+            .map(|id| RoleId::new(id))
+            .unwrap_or(ctx.data().participant_role_id);
 
-        ctx.send(CreateReply::default()
-            .content(format!("<@&{}> A new quest is available!", participant_role_id))
-            .embed(CreateEmbed::default()
-                .title(format!("⚔️ New Quest: {}", payload.title))
-                 .description(&payload.description)
-                 .field("📁 Category", &payload.category, true)
-                 .field("🛡️ By", &payload.organizer_name, true)
-                 .field("👥 Slots", &data.slots, true)
-                 .field("📅 Start Time", format!("<t:{}:f>", display_ts), true)
-                 .field("⏰ Deadline", format!("<t:{}:f>", display_dl), true)
-                 .field("📍 Location", &payload.platform, true)
-                 .field("ID", &quest_id, false)
+        let embed = CreateEmbed::default()
+            .title(format!("⚔️ New Quest: {}", payload.title))
+            .description(&payload.description)
+            .field("📁 Category", &payload.category, true)
+            .field("🛡️ By", &payload.organizer_name, true)
+            .field("👥 Slots", &data.slots, true)
+            .field("📅 Start Time", format!("<t:{}:f>", display_ts), true)
+            .field("⏰ Deadline", format!("<t:{}:f>", display_dl), true)
+            .field("📍 Location", &payload.platform, true)
+            .field("ID", &quest_id, false)
+            .color(0xF1C40F)
+            .footer(CreateEmbedFooter::new("Use /take <id> to take the quest"));
 
-                 .color(0xF1C40F)
-                 .footer(CreateEmbedFooter::new("Use /take <id> to take the quest"))
-            )
-        ).await?;
+        let message = CreateReply::default()
+            .content(format!("<@&{}> A new quest is available!", ping_role))
+            .embed(embed.clone());
 
-        produce_event(ctx, "CREATE_QUEST", &payload).await?;
+        if let Some(channel_id) = config.announcement_channel_id {
+            let target_channel = ChannelId::new(channel_id);
+            target_channel.send_message(&ctx.serenity_context().http, 
+                    CreateMessage::new()
+                    .content(format!("<@&{}> A new quest is available!", ping_role))
+                    .embed(embed)
+            ).await?;
+            
+            ctx.send(CreateReply::default()
+                .content(format!("✅ Quest created and announced in <#{}>", channel_id))
+                .ephemeral(true)
+            ).await?;
+        } else {
+            ctx.send(message).await?;
+        }
     }
 
     Ok(())
@@ -378,6 +400,9 @@ pub async fn edit(
     let mut existing_deadline = String::new();
     let mut existing_description = String::new();
     let mut found = false;
+
+    let guild_id = ctx.guild_id().ok_or("Must be in guild")?;
+    let config = get_guild_config(ctx, guild_id.get()).await.unwrap_or_default();
 
     match res {
         Ok(data) => {
@@ -550,11 +575,11 @@ pub async fn edit(
             .map(|dt| dt.timestamp())
             .unwrap_or(0);
 
-        let participant_role_id = ctx.data().participant_role_id;
+        let ping_role = config.ping_role_id
+            .map(|id| RoleId::new(id))
+            .unwrap_or(ctx.data().participant_role_id);
 
-        ctx.send(CreateReply::default()
-            .content(format!("<@&{}> A quest is edited!", participant_role_id))
-            .embed(CreateEmbed::default()
+        let embed = CreateEmbed::default()
                 .title(format!("✏️ Quest Edited: {}", final_title))
                 .description(&edit_payload.description)
                 .field("👥 Slots", format!("{}", final_slots), true)
@@ -563,9 +588,27 @@ pub async fn edit(
                 .field("📍 Location", &edit_payload.platform, true)
                 .field("ID", &quest_id, false)
                 .color(0x3498DB)
-                .footer(CreateEmbedFooter::new("Use /take <id> to take the quest"))
-            )
-        ).await?;
+                .footer(CreateEmbedFooter::new("Use /take <id> to take the quest"));
+
+        let message = CreateReply::default()
+            .content(format!("<@&{}> A new quest is available!", ping_role))
+            .embed(embed.clone());
+
+        if let Some(channel_id) = config.announcement_channel_id {
+            let target_channel = ChannelId::new(channel_id);
+            target_channel.send_message(&ctx.serenity_context().http, 
+                    CreateMessage::new()
+                    .content(format!("<@&{}> A new quest is available!", ping_role))
+                    .embed(embed)
+            ).await?;
+            
+            ctx.send(CreateReply::default()
+                .content(format!("✅ Quest edited and announced in <#{}>", channel_id))
+                .ephemeral(true)
+            ).await?;
+        } else {
+            ctx.send(message).await?;
+        }
     }
 
     Ok(())
@@ -579,6 +622,10 @@ pub async fn delete(
     ctx.defer_ephemeral().await?;
     let lookup = get_cached_sheet_data(ctx).await;
     let mut quest_name = String::new();
+
+    let guild_id = ctx.guild_id().ok_or("Must be in guild")?;
+    let config = get_guild_config(ctx, guild_id.get()).await.unwrap_or_default();
+    
     match lookup {
         Ok(data) => {
             let mut found = false;
@@ -610,17 +657,26 @@ pub async fn delete(
         return Ok(());
     }
 
-    let participant_role_id = ctx.data().participant_role_id;
+    let ping_role = config.ping_role_id
+            .map(|id| RoleId::new(id))
+            .unwrap_or(ctx.data().participant_role_id);
 
-    ctx.send(CreateReply::default()
-        .content(format!("✅ Delete request for quest `{}` with id `{}` sent.", quest_name, quest_id))
-        .ephemeral(true)
-    ).await?;
+        let message = format!("<@&{}> a quest `{}` with id `{}` has been deleted!", quest_name, quest_id, ping_role);
 
-    ctx.send(CreateReply::default()
-        .content(format!("<@&{}> a quest `{}` with id `{}` has been deleted!", quest_name, quest_id, participant_role_id))
-        .ephemeral(true)
-    ).await?;
+        if let Some(channel_id) = config.announcement_channel_id {
+            let target_channel = ChannelId::new(channel_id);
+            target_channel.send_message(&ctx.serenity_context().http, 
+                    CreateMessage::new()
+                    .content(message.clone())
+            ).await?;
+            
+            ctx.send(CreateReply::default()
+                .content(format!("✅ Delete request for quest `{}` with id `{}` sent.", quest_name, quest_id))
+                .ephemeral(true)
+            ).await?;
+        } else {
+            ctx.send(CreateReply::default().content(message)).await?;
+        }
     Ok(())
 }
 
