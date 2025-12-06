@@ -835,6 +835,7 @@ pub async fn submit(
     quest_id: String,
     #[description = "Upload Proof"] proof_image: Attachment,
 ) -> Result<(), Error> {
+    
 
     if let Some(ctype) = &proof_image.content_type {
         if !ctype.starts_with("image/") {

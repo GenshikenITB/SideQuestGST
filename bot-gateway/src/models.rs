@@ -93,8 +93,35 @@ pub struct StatsResult {
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub struct GuildConfig {
+    // Channels
     pub announcement_channel_id: Option<u64>,
+    pub proof_channel_id: Option<u64>,
+    pub log_channel_id: Option<u64>,
+    
+    // Roles
     pub ping_role_id: Option<u64>,
+    pub quest_giver_role_id: Option<u64>,
+    pub verifier_role_id: Option<u64>,
+}
+
+#[derive(Debug, Clone, Copy, poise::ChoiceParameter)]
+pub enum ChannelConfigType {
+    #[name = "Announcement Channel"]
+    Announcement,
+    #[name = "Proof Submission Channel"]
+    Proof,
+    #[name = "Log Channel"]
+    Log,
+}
+
+#[derive(Debug, Clone, Copy, poise::ChoiceParameter)]
+pub enum RoleConfigType {
+    #[name = "Ping Role (for announcements)"]
+    Ping,
+    #[name = "Quest Giver Role"]
+    QuestGiver,
+    #[name = "Verifier Role"]
+    Verifier,
 }
 pub enum QuestCompleteMode {
     Take,
