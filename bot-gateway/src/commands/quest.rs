@@ -866,7 +866,7 @@ pub async fn submit(
         target_channel.send_files(
             &ctx,
             vec![attachment],
-            CreateMessage::new().content(format!("Proof from {}", ctx.author().name))
+            CreateMessage::new().content(format!("Proof for Quest ID: `{}` from `{}`", quest_id, ctx.author().name))
         ).await?;
     }
 
