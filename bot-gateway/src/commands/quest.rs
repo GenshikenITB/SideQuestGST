@@ -10,7 +10,7 @@ use futures_util::{stream, Stream};
 use futures_util::StreamExt;
 use poise::Modal as _;
 use poise::CreateReply;
-use serenity::all::{Attachment, AutocompleteChoice, ChannelId, CreateEmbed, CreateEmbedFooter, CreateMessage, RoleId};
+use serenity::all::{Attachment, AutocompleteChoice, ChannelId, CreateAttachment, CreateEmbed, CreateEmbedFooter, CreateMessage, RoleId};
 use chrono::{DateTime, Utc};
 
 type Context<'a> = poise::Context<'a, Data, Error>;
@@ -835,7 +835,9 @@ pub async fn submit(
     quest_id: String,
     #[description = "Upload Proof"] proof_image: Attachment,
 ) -> Result<(), Error> {
-    
+    ctx.defer().await?;
+    let guild_id = ctx.guild_id().ok_or("Must be in guild")?;
+    let config = get_guild_config(ctx, guild_id.get()).await.unwrap_or_default();
 
     if let Some(ctype) = &proof_image.content_type {
         if !ctype.starts_with("image/") {
@@ -847,6 +849,10 @@ pub async fn submit(
         return Ok(());
     }
 
+    let image_bytes = proof_image.download().await?;
+
+    let attachment =  CreateAttachment::bytes(image_bytes, &proof_image.filename);
+
     let payload = ProofPayload {
         quest_id: quest_id.clone(),
         user_id: ctx.author().id.to_string(),
@@ -854,6 +860,15 @@ pub async fn submit(
     };
 
     produce_event(ctx, "SUBMIT_PROOF", &payload).await?;
+
+    if let Some(channel_id) = config.proof_channel_id {
+        let target_channel = ChannelId::new(channel_id);
+        target_channel.send_files(
+            &ctx,
+            vec![attachment],
+            CreateMessage::new().content(format!("Proof from {}", ctx.author().name))
+        ).await?;
+    }
 
     ctx.say(format!("✅ Proof for quest `{}` has been successfully submitted.", quest_id)).await?;
     Ok(())
