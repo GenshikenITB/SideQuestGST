@@ -835,7 +835,7 @@ pub async fn submit(
     quest_id: String,
     #[description = "Upload Proof"] proof_image: Attachment,
 ) -> Result<(), Error> {
-    ctx.defer().await?;
+    ctx.defer_ephemeral().await?;
     let guild_id = ctx.guild_id().ok_or("Must be in guild")?;
     let config = get_guild_config(ctx, guild_id.get()).await.unwrap_or_default();
 
