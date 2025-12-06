@@ -20,10 +20,10 @@ async fn paginate_embeds(ctx: Context<'_>, embeds: Vec<serenity::CreateEmbed>) -
     
     let buttons = vec![
         CreateButton::new("prev")
-            .label("◀ Prev")
+            .label("Prev")
             .style(ButtonStyle::Secondary),
         CreateButton::new("next")
-            .label("Next ▶")
+            .label("Next")
             .style(ButtonStyle::Primary),
     ];
     let action_row = CreateActionRow::Buttons(buttons);
@@ -59,24 +59,20 @@ async fn paginate_embeds(ctx: Context<'_>, embeds: Vec<serenity::CreateEmbed>) -
     while let Some(interaction) = collector.next().await {
         let custom_id = &interaction.data.custom_id;
 
-        // Acknowledge interaction with deferred update
-        let response = CreateInteractionResponse::Defer(
-            CreateInteractionResponseMessage::new()
-        );
-        let _ = interaction.create_response(&ctx_serenity.http, response).await;
-
         match custom_id.as_str() {
             "next" => page_idx = (page_idx + 1) % embeds.len(),
             "prev" => page_idx = if page_idx == 0 { embeds.len() - 1 } else { page_idx - 1 },
             _ => {}
         }
 
-        let edit = EditMessage::new()
+        let response_data = CreateInteractionResponseMessage::new()
             .embed(embeds[page_idx].clone())
             .components(vec![action_row.clone()]);
 
-        if let Err(e) = channel_id.edit_message(&ctx_serenity.http, msg_id, edit).await {
-            eprintln!("Failed to edit paginated message: {:?}", e);
+        let response = CreateInteractionResponse::UpdateMessage(response_data);
+
+        if let Err(e) = interaction.create_response(&ctx_serenity.http, response).await {
+            eprintln!("Failed to update message: {:?}", e);
         }
     }
 
